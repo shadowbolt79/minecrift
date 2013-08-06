@@ -401,8 +401,8 @@ public class VRRenderer extends EntityRenderer
 	        catch (NoSuchFieldException e) {
 		        try
 		        {
-		        	_soundManagerSndSystemField = SoundManager.class.getDeclaredField("b"); //obfuscated name
-		        	System.out.println("VRRender: Reflected obfuscated b");
+		        	_soundManagerSndSystemField = SoundManager.class.getDeclaredField("a"); //obfuscated name
+		        	System.out.println("VRRender: Reflected obfuscated a");
 		        }
 		        catch (NoSuchFieldException e1) { 
 		        	System.out.println("VRRender: got sndSystem directly");
