@@ -186,7 +186,7 @@ public class PluginManager implements IEventListener
         {
             case IOrientationProvider.EVENT_CALIBRATION_SET_ORIGIN:
             {
-                Minecraft.getMinecraft().gameSettings.posTrackResetPosition = true;
+                Minecraft.getMinecraft().vrSettings.posTrackResetPosition = true;
                 break;
             }
         }

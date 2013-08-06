@@ -1,16 +1,52 @@
 --- a/net/minecraft/src/GuiScreen.java
 +++ b/net/minecraft/src/GuiScreen.java
-@@ -39,6 +39,9 @@
+@@ -26,7 +26,7 @@
+     public int height;
+ 
+     /** A list of all the buttons in this container. */
+-    protected List buttonList = new ArrayList();
++    public List<GuiButton> buttonList = new ArrayList<GuiButton>();
+     public boolean allowUserInput = false;
+ 
+     /** The FontRenderer used by GuiScreen */
+@@ -39,6 +39,12 @@
      private long field_85043_c = 0L;
      private int field_92018_d = 0;
  
 +	public int mouseOffsetX = 0;
 +	public int mouseOffsetY = 0;
++	
++	public int joystickX = 0;
++	public int joystickY = 0;
 +
      /**
       * Draws the screen and all the components in it.
       */
-@@ -177,14 +180,40 @@
+@@ -46,7 +52,7 @@
+     {
+         for (int var4 = 0; var4 < this.buttonList.size(); ++var4)
+         {
+-            GuiButton var5 = (GuiButton)this.buttonList.get(var4);
++            GuiButton var5 = this.buttonList.get(var4);
+             var5.drawButton(this.mc, par1, par2);
+         }
+     }
+@@ -110,7 +116,7 @@
+         {
+             for (int var4 = 0; var4 < this.buttonList.size(); ++var4)
+             {
+-                GuiButton var5 = (GuiButton)this.buttonList.get(var4);
++                GuiButton var5 = this.buttonList.get(var4);
+ 
+                 if (var5.mousePressed(this.mc, par1, par2))
+                 {
+@@ -172,19 +178,70 @@
+             this.handleMouseInput();
+         }
+ 
+-        while (Keyboard.next())
++        while (Keyboard.isCreated() && Keyboard.next())
+         {
              this.handleKeyboardInput();
          }
      }
@@ -38,6 +74,24 @@
 +        long var3 = Minecraft.getSystemTime() - this.field_85043_c;
 +        this.func_85041_a(var1, var2, this.eventButton, var3);
 +    }
++
++    public void mouseGuiDown( int guiX, int guiY, int button )
++    {
++        this.eventButton = button;
++        this.field_85043_c = Minecraft.getSystemTime();
++        mouseClicked(guiX, guiY, button);
++    }
++    
++    public void mouseGuiUp( int guiX, int guiY, int button )
++    {
++        mouseMovedOrUp(guiX, guiY, button);
++    }
++    
++    public void mouseGuiDrag( int guiX, int guiY )
++    {
++        long var3 = Minecraft.getSystemTime() - this.field_85043_c;
++        this.func_85041_a(guiX, guiY, this.eventButton, var3);
++    }
  
      /**
       * Handles mouse input.
@@ -50,10 +104,17 @@
 +        int var2 = this.height - ( Mouse.getEventY()  + mouseOffsetY) * this.height/ this.mc.displayFBHeight - 1;
 +        mouseOffsetX = 0;
 +        mouseOffsetY = 0;
++        if( joystickX > 0 )
++        {
++        	var1 = joystickX;
++        	var2 = joystickY;
++        	joystickX = 0;
++        	joystickY = 0;
++        }
  
          if (Mouse.getEventButtonState())
          {
-@@ -261,7 +290,7 @@
+@@ -261,7 +318,7 @@
      {
          if (this.mc.theWorld != null)
          {

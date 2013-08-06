@@ -1,21 +1,26 @@
 package com.mtbs3d.minecrift.gui;
 
+import com.mtbs3d.minecrift.settings.VRSettings;
+
 import net.minecraft.src.*;
 
 public class GuiHUDSettings extends BaseGuiSettings
 {
     static EnumOptions[] hudOptions = new EnumOptions[] {
+            EnumOptions.HUD_HIDE,
             EnumOptions.HUD_SCALE,
+            EnumOptions.HUD_PITCH,
             EnumOptions.HUD_DISTANCE,
             EnumOptions.HUD_OPACITY,
-            EnumOptions.BLOCK_OUTLINE_ALWAYS_SHOW,
-            EnumOptions.CROSSHAIR_ALWAYS_SHOW,
+            EnumOptions.HUD_OCCLUSION,
             EnumOptions.CROSSHAIR_SCALE,
+            EnumOptions.CROSSHAIR_ALWAYS_SHOW,
             EnumOptions.CROSSHAIR_ROLL,
+            EnumOptions.BLOCK_OUTLINE_ALWAYS_SHOW,
     };
 
-    public GuiHUDSettings(GuiScreen guiScreen, GameSettings guiGameSettings) {
-        super( guiScreen, guiGameSettings );
+    public GuiHUDSettings(GuiScreen guiScreen, VRSettings guivrSettings) {
+        super( guiScreen, guivrSettings );
         screenTitle = "HUD / Overlay Settings";
     }
 
@@ -26,7 +31,7 @@ public class GuiHUDSettings extends BaseGuiSettings
     {
         StringTranslate stringTranslate = StringTranslate.getInstance();
         this.buttonList.clear();
-//        this.buttonList.add(new GuiSmallButtonEx(EnumOptions.USE_VR.returnEnumOrdinal(), this.width / 2 - 78, this.height / 6 - 14, EnumOptions.USE_VR, this.guiGameSettings.getKeyBinding(EnumOptions.USE_VR)));
+//        this.buttonList.add(new GuiSmallButtonEx(EnumOptions.USE_VR.returnEnumOrdinal(), this.width / 2 - 78, this.height / 6 - 14, EnumOptions.USE_VR, this.guivrSettings.getKeyBinding(EnumOptions.USE_VR)));
         this.buttonList.add(new GuiButtonEx(201, this.width / 2 - 100, this.height / 6 + 148, "Reset To Defaults"));
         this.buttonList.add(new GuiButtonEx(200, this.width / 2 - 100, this.height / 6 + 168, stringTranslate.translateKey("gui.done")));
         EnumOptions[] buttons = hudOptions;
@@ -45,28 +50,40 @@ public class GuiHUDSettings extends BaseGuiSettings
 
                 if (var8 == EnumOptions.HUD_SCALE)
                 {
-                    minValue = 0.5f;
-                    maxValue = 1.5f;
+                    minValue = 0.35f;
+                    maxValue = 2.5f;
                     increment = 0.01f;
                 }
-                if (var8 == EnumOptions.HUD_DISTANCE)
+                else if (var8 == EnumOptions.HUD_DISTANCE)
                 {
-                    minValue = 0.5f;
-                    maxValue = 3.0f;
-                    increment = 0.02f;
+                    minValue = 0.25f;
+                    maxValue = 5.0f;
+                    increment = 0.01f;
                 }
-                if (var8 == EnumOptions.CROSSHAIR_SCALE)
+                else if (var8 == EnumOptions.CROSSHAIR_SCALE)
                 {
                     minValue = 0.25f;
                     maxValue = 2.5f;
                     increment = 0.01f;
                 }
+                else if (var8 == EnumOptions.HUD_PITCH)
+                {
+                    minValue = -45f;
+                    maxValue = 45f;
+                    increment = 1f;
+                }
+                else if (var8 == EnumOptions.HUD_OPACITY)
+                {
+                    minValue = 0.15f;
+                    maxValue = 1.0f;
+                    increment = 0.05f;
+                }
 
-                this.buttonList.add(new GuiSliderEx(var8.returnEnumOrdinal(), width, height, var8, this.guiGameSettings.getKeyBinding(var8), minValue, maxValue, increment, this.guiGameSettings.getOptionFloatValue(var8)));
+                this.buttonList.add(new GuiSliderEx(var8.returnEnumOrdinal(), width, height, var8, this.guivrSettings.getKeyBinding(var8), minValue, maxValue, increment, this.guivrSettings.getOptionFloatValue(var8)));
             }
             else
             {
-                this.buttonList.add(new GuiSmallButtonEx(var8.returnEnumOrdinal(), width, height, var8, this.guiGameSettings.getKeyBinding(var8)));
+                this.buttonList.add(new GuiSmallButtonEx(var8.returnEnumOrdinal(), width, height, var8, this.guivrSettings.getKeyBinding(var8)));
             }
         }
     }
@@ -81,24 +98,27 @@ public class GuiHUDSettings extends BaseGuiSettings
             if (par1GuiButton.id < 200 && par1GuiButton instanceof GuiSmallButtonEx)
             {
                 EnumOptions num = EnumOptions.getEnumOptions(par1GuiButton.id);
-                this.guiGameSettings.setOptionValue(((GuiSmallButtonEx)par1GuiButton).returnEnumOptions(), 1);
-                par1GuiButton.displayString = this.guiGameSettings.getKeyBinding(EnumOptions.getEnumOptions(par1GuiButton.id));
+                this.guivrSettings.setOptionValue(((GuiSmallButtonEx)par1GuiButton).returnEnumOptions(), 1);
+                par1GuiButton.displayString = this.guivrSettings.getKeyBinding(EnumOptions.getEnumOptions(par1GuiButton.id));
             }
             else if (par1GuiButton.id == 200)
             {
-                this.mc.gameSettings.saveOptions();
+                this.mc.vrSettings.saveOptions();
                 this.mc.displayGuiScreen(this.parentGuiScreen);
             }
             else if (par1GuiButton.id == 201)
             {
-                this.guiGameSettings.hudDistance = 1.0f;
-                this.guiGameSettings.hudScale = 1.0f;
-                this.guiGameSettings.useHudOpacity = false;
-                this.guiGameSettings.crosshairScale = 1.0f;
-                this.guiGameSettings.alwaysRenderBlockOutline = false;
-                this.guiGameSettings.alwaysRenderInGameCrosshair = false;
-                this.guiGameSettings.crosshairRollsWithHead = true;
-                this.mc.gameSettings.saveOptions();
+                this.guivrSettings.hudDistance = 1.0f;
+                this.guivrSettings.hudScale = 1.0f;
+                this.guivrSettings.hudPitchOffset = 0f;
+                this.mc.gameSettings.hideGUI = false;
+                this.guivrSettings.hudOpacity = 1.0f;
+                this.guivrSettings.hudOcclusion = false;
+                this.guivrSettings.crosshairScale = 1.0f;
+                this.guivrSettings.alwaysRenderBlockOutline = false;
+                this.guivrSettings.alwaysRenderInGameCrosshair = false;
+                this.guivrSettings.crosshairRollsWithHead = true;
+                this.mc.vrSettings.saveOptions();
                 this.reinit = true;
             }
         }
@@ -113,21 +133,38 @@ public class GuiHUDSettings extends BaseGuiSettings
             {
                 case HUD_OPACITY:
                     return new String[] {
-                            "Whether the in-game HUD and UI are slightly transparent",
-                            "  ON: HUD and UI are transparent",
-                            "  OFF: HUD and UI are opaque"
+                            "How transapernet to draw the in-game HUD and UI",
+                    };
+                case HUD_HIDE:
+                    return new String[] {
+                            "Whether to hide the in-game HUD or not.",
+                            "  YES: The HUD is hidden.",
+                            "  NO:  The HUD is visible."
                     };
                 case HUD_SCALE:
+                return new String[] {
+                        "Relative size HUD takes up in field-of-view",
+                        "  The units are just relative, not in degrees",
+                        "  or a fraction of FOV or anything"
+                };
+                case HUD_PITCH:
                     return new String[] {
-                            "Relative size HUD takes up in field-of-view",
-                            "  The units are just relative, not in degrees",
-                            "  or a fraction of FOV or anything"
+                            "The vertical offset of the HUD, in degrees.",
+                            "  Negative values are down, positive up."
                     };
                 case HUD_DISTANCE:
                     return new String[] {
                             "Distance the floating HUD is drawn in front of your body",
                             "  The relative size of the HUD is unchanged by this",
                             "  Distance is in meters (though isn't obstructed by blocks)"
+                    };
+                case HUD_OCCLUSION:
+                    return new String[] {
+                            "Specifies whether the HUD is occluded by closer objects.",
+                            "  ON:  The HUD will be hidden by closer objects. May",
+                            "       be hidden completely in confined environments!",
+                            "  OFF: The HUD is always visible. Stereo depth issues",
+                            "       may be noticable."
                     };
                 case CROSSHAIR_ALWAYS_SHOW:
                     return new String[] {

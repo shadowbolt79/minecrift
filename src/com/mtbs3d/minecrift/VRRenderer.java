@@ -12,6 +12,7 @@ import java.nio.FloatBuffer;
 import java.util.ArrayList;
 
 import com.mtbs3d.minecrift.api.PluginManager;
+import com.mtbs3d.minecrift.settings.VRSettings;
 import com.mtbs3d.minecrift.utils.Utils;
 import de.fruitfly.ovr.EyeRenderParams;
 import de.fruitfly.ovr.HMDInfo;
@@ -21,9 +22,10 @@ import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.*;
 
 import com.mtbs3d.minecrift.api.IOrientationProvider;
+import com.mtbs3d.minecrift.control.JoystickAim;
 
 import net.minecraft.src.*;
-import org.lwjgl.util.glu.GLU;
+
 import paulscode.sound.SoundSystem;
 
 import static java.lang.Math.ceil;
@@ -143,22 +145,26 @@ public class VRRenderer extends EntityRenderer
 	float aimPitch;
     
     boolean superSampleSupported;
+    boolean vboSupported;
 	private boolean guiShowingLastFrame = false; //Used for detecting when UI is shown, fixing the guiYaw 
 
 	// Calibration
 	private CalibrationHelper calibrationHelper;
     private float INITIAL_CALIBRATION_TEXT_SCALE = 0.0065f;
     private int CALIBRATION_TEXT_WORDWRAP_LEN = 40;
+	private boolean sndSystemReflect = true;
 
     public VRRenderer(Minecraft par1Minecraft, GuiAchievement guiAchiv)
     {
     	super( par1Minecraft );
     	this.guiAchievement = guiAchiv;
+
+        vboSupported = GLContext.getCapabilities().GL_ARB_vertex_buffer_object;  // TODO: We need to unify the supersampleSupported / vboSupported properties
     	
     	try
     	{
     		GL30.glBindVertexArray(0);
-    		superSampleSupported = true;
+    		superSampleSupported = vboSupported;
     		
     	}
     	catch( IllegalStateException e )
@@ -166,7 +172,7 @@ public class VRRenderer extends EntityRenderer
     		superSampleSupported = false;
     	}
 
-        if (this.mc.gameSettings.calibrationStrategy == GameSettings.CALIBRATION_STRATEGY_AT_STARTUP)
+        if (this.mc.vrSettings.calibrationStrategy == VRSettings.CALIBRATION_STRATEGY_AT_STARTUP)
     	    startCalibration();
     }
 
@@ -177,7 +183,7 @@ public class VRRenderer extends EntityRenderer
         //This loop offsets at [-.1, -.1, -.1], [.1,-.1,-.1], [.1,.1,-.1] etc... for all 8 directions
         for (int var20 = 0; var20 < 8; ++var20)
         {
-            final float MIN_DISTANCE = 0.04f;
+            final float MIN_DISTANCE = (this.mc.vrSettings.getIPD() / 2.0f) + 0.06F;
             float var21 = (float)((var20 & 1) * 2 - 1);
             float var22 = (float)((var20 >> 1 & 1) * 2 - 1);
             float var23 = (float)((var20 >> 2 & 1) * 2 - 1);
@@ -249,7 +255,7 @@ public class VRRenderer extends EntityRenderer
         }
 
         // Camera height offset
-        float cameraYOffset = 1.62f - (this.mc.gameSettings.getPlayerEyeHeight() - this.mc.gameSettings.neckBaseToEyeHeight);
+        float cameraYOffset = 1.62f - (this.mc.vrSettings.getPlayerEyeHeight() - this.mc.vrSettings.neckBaseToEyeHeight);
         
         EntityLiving entity = this.mc.renderViewEntity;
         if( entity != null )
@@ -335,7 +341,11 @@ public class VRRenderer extends EntityRenderer
         if (!this.mc.gameSettings.debugCamEnable)
         {
         	//TODO: get rotation matrix instead of pitch/yaw/roll
-            GL11.glRotatef(this.cameraRoll, 0.0F, 0.0F, 1.0F);
+            if (this.mc.gameSettings.thirdPersonView == 2)
+                GL11.glRotatef(-this.cameraRoll, 0.0F, 0.0F, 1.0F);
+            else
+                GL11.glRotatef(this.cameraRoll, 0.0F, 0.0F, 1.0F);
+
             GL11.glRotatef(this.cameraPitch, 1.0F, 0.0F, 0.0F);
             GL11.glRotatef(this.cameraYaw + 180.0F, 0.0F, 1.0F, 0.0F);
         }
@@ -381,23 +391,31 @@ public class VRRenderer extends EntityRenderer
         SoundSystem sndSystem = null;
 
         // Use reflection to get the sndManager
-        if (_soundManagerSndSystemField == null)
+        if (sndSystemReflect && _soundManagerSndSystemField == null)
         {
 	        try
 	        {
 	        	_soundManagerSndSystemField = SoundManager.class.getDeclaredField("sndSystem");
+	        	System.out.println("VRRender: Reflected sndSystem");
 	        }
 	        catch (NoSuchFieldException e) {
 		        try
 		        {
-		        	_soundManagerSndSystemField = SoundManager.class.getDeclaredField("a"); //obfuscated name
+		        	_soundManagerSndSystemField = SoundManager.class.getDeclaredField("b"); //obfuscated name
+		        	System.out.println("VRRender: Reflected obfuscated b");
 		        }
 		        catch (NoSuchFieldException e1) { 
-		        	sndSystem = SoundManager.sndSystem;
+		        	System.out.println("VRRender: got sndSystem directly");
+		        	sndSystemReflect = false;
 		        };
 	        }
 	       	if (_soundManagerSndSystemField != null)
 	       		_soundManagerSndSystemField.setAccessible(true);
+        } 
+        if(!sndSystemReflect ){
+        	if( this.mc.sndManager != null )
+        		sndSystem = this.mc.sndManager.sndSystem;
+        	
         }
         
         
@@ -405,24 +423,34 @@ public class VRRenderer extends EntityRenderer
         {
 			try 
         	{
-				sndSystem = (SoundSystem)_soundManagerSndSystemField.get(null);
+				sndSystem = (SoundSystem)_soundManagerSndSystemField.get(this.mc.sndManager);
 			} 
         	catch (IllegalArgumentException e) { } 
         	catch (IllegalAccessException e) { };
         }
 
+        float PIOVER180 = (float)(Math.PI/180);
+
+        Vec3 up = Vec3.createVectorHelper(0, 1, 0);
+        up.rotateAroundZ(-cameraRoll * PIOVER180);
+        up.rotateAroundX(-cameraPitch* PIOVER180);
+        up.rotateAroundY(-cameraYaw  * PIOVER180);
         if ( sndSystem != null && this.mc.gameSettings.soundVolume != 0.0F)
         {
             sndSystem.setListenerPosition((float)renderOriginX, (float)renderOriginY, (float)renderOriginZ);
-	        float PIOVER180 = (float)(Math.PI/180);
-
-	        Vec3 up = Vec3.createVectorHelper(0, 1, 0);
-	        up.rotateAroundZ(-cameraRoll * PIOVER180);
-	        up.rotateAroundX(-cameraPitch* PIOVER180);
-	        up.rotateAroundY(-cameraYaw  * PIOVER180);
 
             sndSystem.setListenerOrientation(lookX, lookY, lookZ, 
             								(float)up.xCoord, (float)up.yCoord, (float)up.zCoord);
+        }
+        if( mc.mumbleLink != null ) {
+	        Vec3 forward = Vec3.createVectorHelper(0, 0 , -1);
+	        forward.rotateAroundZ(-cameraRoll * PIOVER180);
+	        forward.rotateAroundX(-cameraPitch* PIOVER180);
+	        forward.rotateAroundY(-cameraYaw  * PIOVER180);
+        	mc.mumbleLink.updateMumble(
+        			 (float)renderOriginX,  (float)renderOriginY,  (float)renderOriginZ,
+        			(float)forward.xCoord, (float)forward.yCoord, (float)forward.zCoord,
+            			 (float)up.xCoord,      (float)up.yCoord,      (float)up.zCoord);
         }
     }
     
@@ -437,26 +465,29 @@ public class VRRenderer extends EntityRenderer
     		calibrationHelper = null;
         }
 
-        if (this.mc.gameSettings.posTrackResetPosition)
+        if (this.mc.vrSettings.posTrackResetPosition)
         {
             mc.positionTracker.resetOrigin();
             mc.headTracker.resetOrigin();
             resetGuiYawOrientation();
-            this.mc.gameSettings.posTrackResetPosition = false;
+            this.mc.vrSettings.posTrackResetPosition = false;
         }
 
+        GL11.glFinish();
         PluginManager.pollAll();
+        if(JoystickAim.selectedJoystickMode != null)
+        	JoystickAim.selectedJoystickMode.update( renderPartialTicks );
         
         float lookYawOffset   = mc.lookaimController.getBodyYawDegrees();
         float lookPitchOffset = mc.lookaimController.getBodyPitchDegrees(); 
         
-        if (mc.headTracker.isInitialized() && this.mc.gameSettings.useHeadTracking)
+        if (mc.headTracker.isInitialized() && this.mc.vrSettings.useHeadTracking)
         {
             this.mc.mcProfiler.startSection("oculus");
                                                          // Roll multiplier is a one-way trip to barf-ville!
-            cameraRoll = mc.headTracker.getHeadRollDegrees()  * this.mc.gameSettings.headTrackSensitivity;
-            headPitch  = mc.headTracker.getHeadPitchDegrees() * this.mc.gameSettings.headTrackSensitivity;
-            headYaw    = mc.headTracker.getHeadYawDegrees()   * this.mc.gameSettings.headTrackSensitivity;
+            cameraRoll = mc.headTracker.getHeadRollDegrees()  * this.mc.vrSettings.headTrackSensitivity;
+            headPitch  = mc.headTracker.getHeadPitchDegrees() * this.mc.vrSettings.headTrackSensitivity;
+            headYaw    = mc.headTracker.getHeadYawDegrees()   * this.mc.vrSettings.headTrackSensitivity;
 
             cameraPitch = (lookPitchOffset + headPitch )%180;
             cameraYaw   = (lookYawOffset   + headYaw ) % 360;
@@ -484,7 +515,7 @@ public class VRRenderer extends EntityRenderer
         if( entity != null )
         {
         	//set movement direction
-        	if( this.mc.gameSettings.lookMoveDecoupled )
+        	if( this.mc.vrSettings.lookMoveDecoupled )
 	        	entity.rotationYaw = lookYawOffset;
         	else
         		entity.rotationYaw = cameraYaw;
@@ -493,12 +524,12 @@ public class VRRenderer extends EntityRenderer
         	
         }
 
-        if( this.mc.gameSettings.lookAimYawDecoupled )
+        if( this.mc.vrSettings.aimKeyholeWidthDegrees > 0 )
         	aimYaw    = mc.lookaimController.getAimYaw();
         else
         	aimYaw = cameraYaw;
 
-        if( this.mc.gameSettings.lookAimPitchDecoupled )
+        if( this.mc.vrSettings.keyholeHeight > 0 )
 	        aimPitch  = mc.lookaimController.getAimPitch();
         else 
         	aimPitch = cameraPitch;
@@ -520,7 +551,7 @@ public class VRRenderer extends EntityRenderer
         {
         	float fulldist = (float)(Math.sqrt( camRelX * camRelX + camRelY * camRelY + camRelZ * camRelZ ));
             
-        	float cameraYOffset = 1.62f - (this.mc.gameSettings.getPlayerEyeHeight() - this.mc.gameSettings.neckBaseToEyeHeight);
+        	float cameraYOffset = 1.62f - (this.mc.vrSettings.getPlayerEyeHeight() - this.mc.vrSettings.neckBaseToEyeHeight);
             float colldist = checkCameraCollision(renderOriginX, renderOriginY - cameraYOffset, renderOriginZ, 
             		-camRelX, -camRelY, -camRelZ, fulldist );
             if( colldist != fulldist )
@@ -549,6 +580,7 @@ public class VRRenderer extends EntityRenderer
             //has been set)
         	guiHeadYaw = cameraYaw;
             guiYawOrientationResetRequested = false;
+            guiShowingLastFrame = false;
         }
     } 
 
@@ -567,15 +599,15 @@ public class VRRenderer extends EntityRenderer
         }
 
         //Setup eye render params
-        if ( superSampleSupported && this.mc.gameSettings.useSupersample)
+        if ( superSampleSupported && this.mc.vrSettings.useSupersample)
         {
             eyeRenderParams = mc.hmdInfo.getEyeRenderParams(0,
                     0,
-                    (int)ceil(this.mc.displayFBWidth  * this.mc.gameSettings.superSampleScaleFactor),
-                    (int)ceil(this.mc.displayFBHeight * this.mc.gameSettings.superSampleScaleFactor),
+                    (int)ceil(this.mc.displayFBWidth  * this.mc.vrSettings.superSampleScaleFactor),
+                    (int)ceil(this.mc.displayFBHeight * this.mc.vrSettings.superSampleScaleFactor),
                     0.05F,
                     this.farPlaneDistance * 2.0F,
-                    this.mc.gameSettings.fovScaleFactor,
+                    this.mc.vrSettings.fovScaleFactor,
                     getDistortionFitX(),
                     getDistortionFitY());
         }
@@ -587,7 +619,7 @@ public class VRRenderer extends EntityRenderer
                     this.mc.displayFBHeight,
                     0.05F,
                     this.farPlaneDistance * 2.0F,
-                    this.mc.gameSettings.fovScaleFactor,
+                    this.mc.vrSettings.fovScaleFactor,
                     getDistortionFitX(),
                     getDistortionFitY());
         }
@@ -600,7 +632,6 @@ public class VRRenderer extends EntityRenderer
         int mouseY = 0;
         if ( (this.mc.theWorld != null && !this.mc.gameSettings.hideGUI && this.mc.thePlayer.getSleepTimer() == 0) || this.mc.currentScreen != null )
         {
-
 	    	//Render all UI elements into guiFBO
 	        ScaledResolution var15 = new ScaledResolution(this.mc.gameSettings, this.mc.displayWidth, this.mc.displayHeight);
 	        int var16 = var15.getScaledWidth();
@@ -623,7 +654,7 @@ public class VRRenderer extends EntityRenderer
         }
 
 
-        if (this.mc.theWorld != null && !this.mc.gameSettings.hideGUI)
+        if (this.mc.theWorld != null && !this.mc.gameSettings.hideGUI )
         {
 			//Disable any forge gui crosshairs and helmet overlay (pumkinblur)
 			if( Reflector.ForgeGuiIngame_renderCrosshairs.exists())
@@ -634,6 +665,7 @@ public class VRRenderer extends EntityRenderer
 			//Draw in game GUI
             this.mc.ingameGUI.renderGameOverlay(renderPartialTicks, this.mc.currentScreen != null, mouseX, mouseY);
             guiAchievement.updateAchievementWindow();
+	    	GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT );
         }
 
         if( this.mc.currentScreen != null )
@@ -658,11 +690,11 @@ public class VRRenderer extends EntityRenderer
         }
       
         //Setup render target
-        if (mc.gameSettings.useDistortion)
+        if (mc.vrSettings.useDistortion)
         {
             preDistortionFBO.bindRenderTarget();
         }
-        else if ( superSampleSupported && this.mc.gameSettings.useSupersample)
+        else if ( superSampleSupported && this.mc.vrSettings.useSupersample)
         {
             postDistortionFBO.bindRenderTarget();
             eyeRenderParams._renderScale = 1.0f;
@@ -729,6 +761,7 @@ public class VRRenderer extends EntityRenderer
         		GL11.glPushMatrix();
 
         		this.renderWorld(renderPartialTicks, 0L, renderSceneNumber );
+		        this.disableLightmap(renderPartialTicks);
 
 		        GL11.glMatrixMode(GL11.GL_MODELVIEW );
         		GL11.glPopMatrix();
@@ -741,36 +774,45 @@ public class VRRenderer extends EntityRenderer
         	
         	if( guiShowingThisFrame )
         	{
-
         		GL11.glPushMatrix();
 		        GL11.glEnable(GL11.GL_TEXTURE_2D);
 		        guiFBO.bindTexture();
 
+                // Prevent black border at top / bottom of GUI
+                GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+                GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+
                 float guiYaw;
-                if( this.mc.theWorld != null && this.mc.gameSettings.lookMoveDecoupled)
+                if( this.mc.theWorld != null && this.mc.vrSettings.lookMoveDecoupled)
                     guiYaw = this.mc.lookaimController.getBodyYawDegrees();
                 else
                     guiYaw = guiHeadYaw + this.mc.lookaimController.getBodyYawDegrees();
                 GL11.glRotatef(-guiYaw, 0f, 1f, 0f);
 
-				if( this.mc.gameSettings.pitchInputAffectsCamera)
-		        	GL11.glRotatef( this.mc.lookaimController.getBodyPitchDegrees(), 1f, 0f, 0f);
-				GL11.glTranslatef (0.0f, 0.0f, this.mc.gameSettings.hudDistance);
+                float guiPitch = 0f;
+
+                if (this.mc.theWorld != null)
+                    guiPitch = -this.mc.vrSettings.hudPitchOffset;
+
+				if( this.mc.vrSettings.allowMousePitchInput)
+                    guiPitch += this.mc.lookaimController.getBodyPitchDegrees();
+
+		        GL11.glRotatef(guiPitch, 1f, 0f, 0f);
+				GL11.glTranslatef (0.0f, 0.0f, this.mc.vrSettings.hudDistance);
 				GL11.glRotatef( 180f, 0f, 1f, 0f);//Not sure why this is necessary... normals/backface culling maybe?
-				if( this.mc.gameSettings.useHudOpacity )
-				{
-			        GL11.glEnable(GL11.GL_BLEND);
-			        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-				}
-				else
-				{
-			        GL11.glDisable(GL11.GL_BLEND);
-					
-				}
-		        GL11.glDisable(GL11.GL_DEPTH_TEST);
-				drawQuad2(this.mc.displayWidth,this.mc.displayHeight,this.mc.gameSettings.hudScale*this.mc.gameSettings.hudDistance);
+		        GL11.glEnable(GL11.GL_BLEND);
+		        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+		        if( this.mc.theWorld != null )
+		        	GL11.glColor4f(1, 1, 1, this.mc.vrSettings.hudOpacity);
+		        else
+		        	GL11.glColor4f(1, 1, 1, 1);
+		        if (!this.mc.vrSettings.hudOcclusion)
+                    GL11.glDisable(GL11.GL_DEPTH_TEST);
+
+				drawQuad2(this.mc.displayWidth,this.mc.displayHeight,this.mc.vrSettings.hudScale*this.mc.vrSettings.hudDistance);
 		        GL11.glDisable(GL11.GL_BLEND);
-		        GL11.glEnable(GL11.GL_DEPTH_TEST);
+                GL11.glEnable(GL11.GL_DEPTH_TEST);
+
 		        GL11.glPopMatrix();
 		
 		        unbindTexture();
@@ -780,9 +822,9 @@ public class VRRenderer extends EntityRenderer
 
 	    	if( calibrationHelper != null )
 	    	{
-                float x = lookX*mc.gameSettings.hudDistance;
-                float y = lookY*mc.gameSettings.hudDistance;
-                float z = lookZ*mc.gameSettings.hudDistance;
+                float x = lookX*mc.vrSettings.hudDistance;
+                float y = lookY*mc.vrSettings.hudDistance;
+                float z = lookZ*mc.vrSettings.hudDistance;
 
                 GL11.glDisable(GL11.GL_DEPTH_TEST);
 	            GL11.glPushMatrix();
@@ -841,62 +883,79 @@ public class VRRenderer extends EntityRenderer
             	if( postSuperSampleFBO != null )
 	            	postSuperSampleFBO.delete();
             	postSuperSampleFBO = null;
-	
-	            destroyVBO();
             }
+
+            if (vboSupported)
+                destroyVBO();
         }
 
         if (!_FBOInitialised)
         {
-            System.out.println("Width: " + this.mc.displayFBWidth + ", Height: " + this.mc.displayFBHeight);
-            if ( superSampleSupported && this.mc.gameSettings.useSupersample)
+            System.out.println("[Minecrift] INITIALISE Display");
+            System.out.println("[Minecrift] Display w: " + this.mc.displayFBWidth + ", h: " + this.mc.displayFBHeight);
+            System.out.println("[Minecrift] Renderscale: " + eyeRenderParams._renderScale);
+            if (superSampleSupported && this.mc.vrSettings.useSupersample)
+                System.out.println("[Minecrift] FSAA Scale: " + this.mc.vrSettings.superSampleScaleFactor);
+            else
+                System.out.println("[Minecrift] FSAA OFF");
+
+            if ( superSampleSupported && this.mc.vrSettings.useSupersample)
             {
-                preDistortionFBO = new FBOParams(false, (int)ceil(this.mc.displayFBWidth * eyeRenderParams._renderScale * this.mc.gameSettings.superSampleScaleFactor), (int)ceil(this.mc.displayFBHeight * eyeRenderParams._renderScale * this.mc.gameSettings.superSampleScaleFactor));
+                preDistortionFBO = new FBOParams("preDistortionFBO (SS)", false, (int)ceil(this.mc.displayFBWidth * eyeRenderParams._renderScale * this.mc.vrSettings.superSampleScaleFactor), (int)ceil(this.mc.displayFBHeight * eyeRenderParams._renderScale * this.mc.vrSettings.superSampleScaleFactor));
             }
             else
             {
-                preDistortionFBO = new FBOParams(false, (int)ceil(this.mc.displayFBWidth * eyeRenderParams._renderScale), (int)ceil(this.mc.displayFBHeight * eyeRenderParams._renderScale));
+                preDistortionFBO = new FBOParams("preDistortionFBO", false, (int)ceil(this.mc.displayFBWidth * eyeRenderParams._renderScale), (int)ceil(this.mc.displayFBHeight * eyeRenderParams._renderScale));
             }
             mc.checkGLError("FBO create");
 
-            if (this.mc.gameSettings.useChromaticAbCorrection)
+            if (this.mc.vrSettings.useChromaticAbCorrection)
             {
-                _shaderProgramId = initOculusShaders(OCULUS_BASIC_VERTEX_SHADER, OCULUS_DISTORTION_FRAGMENT_SHADER_WITH_CHROMATIC_ABERRATION_CORRECTION, false);
+                if (vboSupported)
+                    _shaderProgramId = initOculusShaders(OCULUS_BASIC_VERTEX_SHADER_VBO, OCULUS_DISTORTION_FRAGMENT_SHADER_WITH_CHROMATIC_ABERRATION_CORRECTION, true);
+                else
+                    _shaderProgramId = initOculusShaders(OCULUS_BASIC_VERTEX_SHADER, OCULUS_DISTORTION_FRAGMENT_SHADER_WITH_CHROMATIC_ABERRATION_CORRECTION, false);
             }
             else
             {
-                _shaderProgramId = initOculusShaders(OCULUS_BASIC_VERTEX_SHADER, OCULUS_DISTORTION_FRAGMENT_SHADER_NO_CHROMATIC_ABERRATION_CORRECTION, false);
+                if (vboSupported)
+                    _shaderProgramId = initOculusShaders(OCULUS_BASIC_VERTEX_SHADER_VBO, OCULUS_DISTORTION_FRAGMENT_SHADER_NO_CHROMATIC_ABERRATION_CORRECTION, true);
+                else
+                    _shaderProgramId = initOculusShaders(OCULUS_BASIC_VERTEX_SHADER, OCULUS_DISTORTION_FRAGMENT_SHADER_NO_CHROMATIC_ABERRATION_CORRECTION, false);
             }
             mc.checkGLError("FBO init shader");
 
             // GUI FBO
-            guiFBO = new FBOParams(false, this.mc.displayWidth, this.mc.displayHeight);
+            guiFBO = new FBOParams("guiFBO", false, this.mc.displayWidth, this.mc.displayHeight);
             
             if( superSampleSupported )
             {
-	
-	            if (this.mc.gameSettings.useSupersample)
+
+	            if (this.mc.vrSettings.useSupersample)
 	            {
 		            // Lanczos downsample FBOs
-		            postDistortionFBO = new FBOParams(false, (int)ceil(this.mc.displayFBWidth * this.mc.gameSettings.superSampleScaleFactor), (int)ceil(this.mc.displayFBHeight * this.mc.gameSettings.superSampleScaleFactor));
-		            postSuperSampleFBO = new FBOParams(false, (int)ceil(this.mc.displayFBWidth), (int)ceil(this.mc.displayFBHeight * this.mc.gameSettings.superSampleScaleFactor));
-		
+		            postDistortionFBO = new FBOParams("postDistortionFBO (SS)", false, (int)ceil(this.mc.displayFBWidth * this.mc.vrSettings.superSampleScaleFactor), (int)ceil(this.mc.displayFBHeight * this.mc.vrSettings.superSampleScaleFactor));
+		            postSuperSampleFBO = new FBOParams("postSuperSampleFBO (SS)", false, (int)ceil(this.mc.displayFBWidth), (int)ceil(this.mc.displayFBHeight * this.mc.vrSettings.superSampleScaleFactor));
+
 		            mc.checkGLError("Lanczos FBO create");
 
 	                _Lanczos_shaderProgramId = initOculusShaders(LANCZOS_SAMPLER_VERTEX_SHADER, LANCZOS_SAMPLER_FRAGMENT_SHADER, true);
 	                mc.checkGLError("@1");
-	
-	
+
+
 	                GL20.glValidateProgram(_Lanczos_shaderProgramId);
-	
+
 	                mc.checkGLError("FBO init Lanczos shader");
-	
-	                setupVBO();
 	            }
 	            else
 	            {
 	                _Lanczos_shaderProgramId = -1;
 	            }
+            }
+
+            if (vboSupported)
+            {
+                setupVBO();
             }
 
             _FBOInitialised = true;
@@ -941,20 +1000,19 @@ public class VRRenderer extends EntityRenderer
     {
     	int FBWidth = this.mc.displayFBWidth;
     	int FBHeight = this.mc.displayFBHeight;
-        if ( superSampleSupported && this.mc.gameSettings.useSupersample)
+        if ( superSampleSupported && this.mc.vrSettings.useSupersample)
         {
-        	FBWidth  = (int)ceil(this.mc.displayFBWidth  * this.mc.gameSettings.superSampleScaleFactor);
-        	FBHeight = (int)ceil(this.mc.displayFBHeight * this.mc.gameSettings.superSampleScaleFactor);
-        	
+        	FBWidth  = (int)ceil(this.mc.displayFBWidth  * this.mc.vrSettings.superSampleScaleFactor);
+        	FBHeight = (int)ceil(this.mc.displayFBHeight * this.mc.vrSettings.superSampleScaleFactor);
         }
     	
-        if (mc.gameSettings.useDistortion)
+        if (mc.vrSettings.useDistortion)
         {
             mc.checkGLError("Before distortion");
 
             preDistortionFBO.bindTexture();
 
-            if ( superSampleSupported && this.mc.gameSettings.useSupersample)
+            if ( superSampleSupported && this.mc.vrSettings.useSupersample)
             {
             	//chain into the superSample FBO
                 postDistortionFBO.bindRenderTarget();
@@ -1016,34 +1074,58 @@ public class VRRenderer extends EntityRenderer
             ARBShaderObjects.glUniform4fARB(ARBShaderObjects.glGetUniformLocationARB(_shaderProgramId, "HmdWarpParam"), hmdInfo.DistortionK[0], hmdInfo.DistortionK[1], hmdInfo.DistortionK[2], hmdInfo.DistortionK[3]);
             ARBShaderObjects.glUniform4fARB(ARBShaderObjects.glGetUniformLocationARB(_shaderProgramId, "ChromAbParam"), hmdInfo.ChromaticAb[0], hmdInfo.ChromaticAb[1], hmdInfo.ChromaticAb[2], hmdInfo.ChromaticAb[3]);
 
-            GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
-            GL11.glPushMatrix();
-            GL11.glLoadIdentity();
-            GL11.glMatrixMode(GL11.GL_PROJECTION);
-            GL11.glPushMatrix();
-            GL11.glLoadIdentity();
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            if (!vboSupported)
+            {
+                GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+                GL11.glPushMatrix();
+                GL11.glLoadIdentity();
+                GL11.glMatrixMode(GL11.GL_PROJECTION);
+                GL11.glPushMatrix();
+                GL11.glLoadIdentity();
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
 
-            GL11.glTranslatef (0.0f, 0.0f, -0.7f);                               // Translate 6 Units Into The Screen and then rotate
-            GL11.glColor3f(1, 1, 1);                                               // set the color to white
+                GL11.glTranslatef (0.0f, 0.0f, -0.7f);                               // Translate 6 Units Into The Screen and then rotate
+                GL11.glColor3f(1, 1, 1);                                               // set the color to white
 
-            drawQuad();                                                      // draw the box
+                drawQuad();                                                      // draw the box
+
+                GL11.glMatrixMode(GL11.GL_PROJECTION);
+                GL11.glPopMatrix();
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                GL11.glPopMatrix();
+                GL11.glPopAttrib();
+            }
+            else
+            {
+                // Bind to the VAO that has all the information about the vertices
+                GL30.glBindVertexArray(vaoId);
+                GL20.glEnableVertexAttribArray(0);
+                GL20.glEnableVertexAttribArray(1);
+                GL20.glEnableVertexAttribArray(2);
+
+                // Bind to the index VBO that has all the information about the order of the vertices
+                GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, vboiId);
+
+                // Draw the vertices
+                GL11.glDrawElements(GL11.GL_TRIANGLES, indicesCount, GL11.GL_UNSIGNED_BYTE, 0);
+
+                // Put everything back to default (deselect)
+                GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
+                GL20.glDisableVertexAttribArray(0);
+                GL20.glDisableVertexAttribArray(1);
+                GL20.glDisableVertexAttribArray(2);
+                GL30.glBindVertexArray(0);
+            }
 
             // Stop shader use
             ARBShaderObjects.glUseProgramObjectARB(0);
-
-            GL11.glMatrixMode(GL11.GL_PROJECTION);
-            GL11.glPopMatrix();
-            GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glPopMatrix();
-            GL11.glPopAttrib();
 
             OpenGlHelper.setActiveTexture(OpenGlHelper.defaultTexUnit);
 
             mc.checkGLError("After distortion");
         }
 
-        if (superSampleSupported && this.mc.gameSettings.useSupersample)
+        if (superSampleSupported && this.mc.vrSettings.useSupersample)
         {
             // Now switch to 1st pass target framebuffer
         	postSuperSampleFBO.bindRenderTarget();
@@ -1291,7 +1373,7 @@ public class VRRenderer extends EntityRenderer
         GL11.glEnable(GL11.GL_CULL_FACE);
         GL11.glDisable(GL11.GL_BLEND);
 
-        boolean renderOutline = this.mc.gameSettings.alwaysRenderBlockOutline || !this.mc.gameSettings.hideGUI;
+        boolean renderOutline = this.mc.vrSettings.alwaysRenderBlockOutline || !this.mc.gameSettings.hideGUI;
 
         if (this.mc.currentScreen == null && this.cameraZoom == 1.0D && renderViewEntity instanceof EntityPlayer && this.mc.objectMouseOver != null && !renderViewEntity.isInsideOfMaterial(Material.water) && renderOutline)
         {
@@ -1332,7 +1414,7 @@ public class VRRenderer extends EntityRenderer
 	        mc.checkGLError("PostFRenderLast");
         }
 
-        if (this.mc.gameSettings.renderFullFirstPersonModel == false)
+        if (this.mc.vrSettings.renderFullFirstPersonModel == false)
         {
             GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
             this.renderHand(renderPartialTicks, renderSceneNumber);
@@ -1340,19 +1422,19 @@ public class VRRenderer extends EntityRenderer
 
 	    GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f); //white crosshair, with blending
     	//Draw crosshair
-        boolean renderCrosshair = this.mc.gameSettings.alwaysRenderInGameCrosshair || !this.mc.gameSettings.hideGUI;
+        boolean renderCrosshair = this.mc.vrSettings.alwaysRenderInGameCrosshair || !this.mc.gameSettings.hideGUI;
 
     	if( this.mc.currentScreen == null && this.mc.gameSettings.thirdPersonView == 0 && renderCrosshair)
     	{
     		this.mc.mcProfiler.endStartSection("crosshair");
             float crossDepth = (float)Math.sqrt((crossX*crossX + crossY*crossY + crossZ*crossZ));
-            float scale = 0.025f*crossDepth*this.mc.gameSettings.crosshairScale;
+            float scale = 0.025f*crossDepth*this.mc.vrSettings.crosshairScale;
 
             GL11.glPushMatrix();
         	GL11.glTranslatef(crossX, crossY, crossZ);
             GL11.glRotatef(-this.aimYaw, 0.0F, 1.0F, 0.0F);
             GL11.glRotatef(this.aimPitch, 1.0F, 0.0F, 0.0F);
-            if (this.mc.gameSettings.crosshairRollsWithHead)
+            if (this.mc.vrSettings.crosshairRollsWithHead)
                 GL11.glRotatef(this.cameraRoll, 0.0F, 0.0F, 1.0F);
             GL11.glScalef(-scale, -scale, scale);
             GL11.glDisable(GL11.GL_LIGHTING);
@@ -1570,106 +1652,122 @@ public class VRRenderer extends EntityRenderer
 
     public final String OCULUS_BASIC_VERTEX_SHADER =
 
-        "#version 110\n" +
-        "\n" +
-        "void main() {\n" +
-        "    gl_Position = ftransform(); //Transform the vertex position\n" +
-        "    gl_TexCoord[0] = gl_MultiTexCoord0; // Use Texture unit 0\n" +
-        "    //glTexCoord is an openGL defined varying array of vec4. Different elements in the array can be used for multi-texturing with\n" +
-        "    //different textures, each requiring their own coordinates.\n" +
-        "    //gl_MultiTexCoord0 is an openGl defined attribute vec4 containing the texture coordinates for unit 0 (I'll explain units soon) that\n" +
-        "    //you give with calls to glTexCoord2f, glTexCoordPointer etc. gl_MultiTexCoord1 contains unit 1, gl_MultiTexCoord2  unit 2 etc.\n" +
-        "}\n";
+            "#version 110\n" +
+                    "\n" +
+                    "varying vec4 textCoord;\n" +
+                    "void main() {\n" +
+                    "    gl_Position = ftransform(); //Transform the vertex position\n" +
+                    "    textCoord = gl_MultiTexCoord0; // Use Texture unit 0\n" +
+                    "    //glTexCoord is an openGL defined varying array of vec4. Different elements in the array can be used for multi-texturing with\n" +
+                    "    //different textures, each requiring their own coordinates.\n" +
+                    "    //gl_MultiTexCoord0 is an openGl defined attribute vec4 containing the texture coordinates for unit 0 (I'll explain units soon) that\n" +
+                    "    //you give with calls to glTexCoord2f, glTexCoordPointer etc. gl_MultiTexCoord1 contains unit 1, gl_MultiTexCoord2  unit 2 etc.\n" +
+                    "}\n";
+
+    public final String OCULUS_BASIC_VERTEX_SHADER_VBO =
+
+        "#version 120\n" +
+                "\n" +
+                " attribute vec4 in_Position;//position;\n" +
+                " attribute vec4 in_Color;//position;\n" +
+                " attribute vec2 in_TextureCoord;//inputTextureCoordinate;\n" +
+                " varying vec4 textCoord;\n" +
+                "void main() {\n" +
+                "    gl_Position = vec4(in_Position.x, in_Position.y, 0.0, 1.0);\n" +
+                "    textCoord = vec4(in_TextureCoord.s, in_TextureCoord.t, 0.0, 0.0);\n" +
+                "}\n";
 
     public final String OCULUS_DISTORTION_FRAGMENT_SHADER_NO_CHROMATIC_ABERRATION_CORRECTION =
 
-        "#version 120\n" +
-        "\n" +
-        "uniform sampler2D bgl_RenderTexture;\n" +
-        "uniform int half_screenWidth;\n" +
-        "uniform vec2 LeftLensCenter;\n" +
-        "uniform vec2 RightLensCenter;\n" +
-        "uniform vec2 LeftScreenCenter;\n" +
-        "uniform vec2 RightScreenCenter;\n" +
-        "uniform vec2 Scale;\n" +
-        "uniform vec2 ScaleIn;\n" +
-        "uniform vec4 HmdWarpParam;\n" +
-        "uniform vec4 ChromAbParam;\n" +
-        "\n" +
-        "// Scales input texture coordinates for distortion.\n" +
-        "vec2 HmdWarp(vec2 in01, vec2 LensCenter)\n" +
-        "{\n" +
-        "    vec2 theta = (in01 - LensCenter) * ScaleIn; // Scales to [-1, 1]\n" +
-        "    float rSq = theta.x * theta.x + theta.y * theta.y;\n" +
-        "    vec2 rvector = theta * (HmdWarpParam.x + HmdWarpParam.y * rSq +\n" +
-        "            HmdWarpParam.z * rSq * rSq +\n" +
-        "            HmdWarpParam.w * rSq * rSq * rSq);\n" +
-        "    return LensCenter + Scale * rvector;\n" +
-        "}\n" +
-        "\n" +
-        "void main()\n" +
-        "{\n" +
-        "    // The following two variables need to be set per eye\n" +
-        "    vec2 LensCenter = gl_FragCoord.x < half_screenWidth ? LeftLensCenter : RightLensCenter;\n" +
-        "    vec2 ScreenCenter = gl_FragCoord.x < half_screenWidth ? LeftScreenCenter : RightScreenCenter;\n" +
-        "\n" +
-        "    vec2 oTexCoord = gl_TexCoord[0].xy;\n" +
-        "    //vec2 oTexCoord = (gl_FragCoord.xy + vec2(0.5, 0.5)) / vec2(screenWidth, screenHeight);\n" +
-        "\n" +
-        "    vec2 tc = HmdWarp(oTexCoord, LensCenter);\n" +
-        "    if (any(bvec2(clamp(tc,ScreenCenter-vec2(0.25,0.5), ScreenCenter+vec2(0.25,0.5)) - tc)))\n" +
-        "    {\n" +
-        "        gl_FragColor = vec4(vec3(0.0), 1.0);\n" +
-        "        return;\n" +
-        "    }\n" +
-        "\n" +
-        "    //tc.x = gl_FragCoord.x < half_screenWidth ? (2.0 * tc.x) : (2.0 * (tc.x - 0.5));\n" +
-        "    //gl_FragColor = texture2D(bgl_RenderTexture, tc).aaaa * texture2D(bgl_RenderTexture, tc);\n" +
-        "    gl_FragColor = texture2D(bgl_RenderTexture, tc);\n" +
-        "}\n";
+            "#version 120\n" +
+                    "\n" +
+                    "uniform sampler2D bgl_RenderTexture;\n" +
+                    "uniform int half_screenWidth;\n" +
+                    "uniform vec2 LeftLensCenter;\n" +
+                    "uniform vec2 RightLensCenter;\n" +
+                    "uniform vec2 LeftScreenCenter;\n" +
+                    "uniform vec2 RightScreenCenter;\n" +
+                    "uniform vec2 Scale;\n" +
+                    "uniform vec2 ScaleIn;\n" +
+                    "uniform vec4 HmdWarpParam;\n" +
+                    "uniform vec4 ChromAbParam;\n" +
+                    "varying vec4 textCoord;\n" +
+                    "\n" +
+                    "// Scales input texture coordinates for distortion.\n" +
+                    "vec2 HmdWarp(vec2 in01, vec2 LensCenter)\n" +
+                    "{\n" +
+                    "    vec2 theta = (in01 - LensCenter) * ScaleIn; // Scales to [-1, 1]\n" +
+                    "    float rSq = theta.x * theta.x + theta.y * theta.y;\n" +
+                    "    vec2 rvector = theta * (HmdWarpParam.x + HmdWarpParam.y * rSq +\n" +
+                    "            HmdWarpParam.z * rSq * rSq +\n" +
+                    "            HmdWarpParam.w * rSq * rSq * rSq);\n" +
+                    "    return LensCenter + Scale * rvector;\n" +
+                    "}\n" +
+                    "\n" +
+                    "void main()\n" +
+                    "{\n" +
+                    "    // The following two variables need to be set per eye\n" +
+                    "    vec2 LensCenter = gl_FragCoord.x < half_screenWidth ? LeftLensCenter : RightLensCenter;\n" +
+                    "    vec2 ScreenCenter = gl_FragCoord.x < half_screenWidth ? LeftScreenCenter : RightScreenCenter;\n" +
+                    "\n" +
+                    "    vec2 oTexCoord = textCoord.xy;\n" +
+                    "    //vec2 oTexCoord = (gl_FragCoord.xy + vec2(0.5, 0.5)) / vec2(screenWidth, screenHeight);\n" +
+                    "\n" +
+                    "    vec2 tc = HmdWarp(oTexCoord, LensCenter);\n" +
+                    "    if (any(bvec2(clamp(tc,ScreenCenter-vec2(0.25,0.5), ScreenCenter+vec2(0.25,0.5)) - tc)))\n" +
+                    "    {\n" +
+                    "        gl_FragColor = vec4(vec3(0.0), 1.0);\n" +
+                    "        return;\n" +
+                    "    }\n" +
+                    "\n" +
+                    "    //tc.x = gl_FragCoord.x < half_screenWidth ? (2.0 * tc.x) : (2.0 * (tc.x - 0.5));\n" +
+                    "    //gl_FragColor = texture2D(bgl_RenderTexture, tc).aaaa * texture2D(bgl_RenderTexture, tc);\n" +
+                    "    gl_FragColor = texture2D(bgl_RenderTexture, tc);\n" +
+                    "}\n";
 
     public final String OCULUS_DISTORTION_FRAGMENT_SHADER_WITH_CHROMATIC_ABERRATION_CORRECTION =
 
-        "#version 120\n" +
-        "\n" +
-        "uniform sampler2D bgl_RenderTexture;\n" +
-        "uniform int half_screenWidth;\n" +
-        "uniform vec2 LeftLensCenter;\n" +
-        "uniform vec2 RightLensCenter;\n" +
-        "uniform vec2 LeftScreenCenter;\n" +
-        "uniform vec2 RightScreenCenter;\n" +
-        "uniform vec2 Scale;\n" +
-        "uniform vec2 ScaleIn;\n" +
-        "uniform vec4 HmdWarpParam;\n" +
-        "uniform vec4 ChromAbParam;\n" +
-        "\n" +
-        "void main()\n" +
-        "{\n" +
-        "    vec2 LensCenter = gl_FragCoord.x < half_screenWidth ? LeftLensCenter : RightLensCenter;\n" +
-        "    vec2 ScreenCenter = gl_FragCoord.x < half_screenWidth ? LeftScreenCenter : RightScreenCenter;\n" +
-        "\n" +
-        "    vec2 theta = (gl_TexCoord[0].xy - LensCenter) * ScaleIn;\n" +
-        "    float rSq = theta.x * theta.x + theta.y * theta.y;\n" +
-        "    vec2 theta1 = theta * (HmdWarpParam.x + HmdWarpParam.y * rSq + HmdWarpParam.z * rSq * rSq + HmdWarpParam.w * rSq * rSq * rSq);\n" +
-        "\n" +
-        "    vec2 thetaBlue = theta1 * (ChromAbParam.w * rSq + ChromAbParam.z);\n" +
-        "    vec2 tcBlue = thetaBlue * Scale + LensCenter;\n" +
-        "\n" +
-        "    if (any(bvec2(clamp(tcBlue, ScreenCenter-vec2(0.25,0.5), ScreenCenter+vec2(0.25,0.5)) - tcBlue))) {\n" +
-        "        gl_FragColor = vec4(vec3(0.0), 1.0);\n" +
-        "        return;\n" +
-        "    }\n" +
-        "    float blue = texture2D(bgl_RenderTexture, tcBlue).b;\n" +
-        "\n" +
-        "    vec2 tcGreen = theta1 * Scale + LensCenter;\n" +
-        "    float green = texture2D(bgl_RenderTexture, tcGreen).g;\n" +
-        "\n" +
-        "    vec2 thetaRed = theta1 * (ChromAbParam.y * rSq + ChromAbParam.x);\n" +
-        "    vec2 tcRed = thetaRed * Scale + LensCenter;\n" +
-        "    float red = texture2D(bgl_RenderTexture, tcRed).r;\n" +
-        "\n" +
-        "    gl_FragColor = vec4(red, green, blue, 1.0);\n" +
-        "}\n";
+            "#version 120\n" +
+                    "\n" +
+                    "uniform sampler2D bgl_RenderTexture;\n" +
+                    "uniform int half_screenWidth;\n" +
+                    "uniform vec2 LeftLensCenter;\n" +
+                    "uniform vec2 RightLensCenter;\n" +
+                    "uniform vec2 LeftScreenCenter;\n" +
+                    "uniform vec2 RightScreenCenter;\n" +
+                    "uniform vec2 Scale;\n" +
+                    "uniform vec2 ScaleIn;\n" +
+                    "uniform vec4 HmdWarpParam;\n" +
+                    "uniform vec4 ChromAbParam;\n" +
+                    "varying vec4 textCoord;\n" +
+                    "\n" +
+                    "void main()\n" +
+                    "{\n" +
+                    "    vec2 LensCenter = gl_FragCoord.x < half_screenWidth ? LeftLensCenter : RightLensCenter;\n" +
+                    "    vec2 ScreenCenter = gl_FragCoord.x < half_screenWidth ? LeftScreenCenter : RightScreenCenter;\n" +
+                    "\n" +
+                    "    vec2 theta = (textCoord.xy - LensCenter) * ScaleIn;\n" +
+                    "    float rSq = theta.x * theta.x + theta.y * theta.y;\n" +
+                    "    vec2 theta1 = theta * (HmdWarpParam.x + HmdWarpParam.y * rSq + HmdWarpParam.z * rSq * rSq + HmdWarpParam.w * rSq * rSq * rSq);\n" +
+                    "\n" +
+                    "    vec2 thetaBlue = theta1 * (ChromAbParam.w * rSq + ChromAbParam.z);\n" +
+                    "    vec2 tcBlue = thetaBlue * Scale + LensCenter;\n" +
+                    "\n" +
+                    "    if (any(bvec2(clamp(tcBlue, ScreenCenter-vec2(0.25,0.5), ScreenCenter+vec2(0.25,0.5)) - tcBlue))) {\n" +
+                    "        gl_FragColor = vec4(vec3(0.0), 1.0);\n" +
+                    "        return;\n" +
+                    "    }\n" +
+                    "    float blue = texture2D(bgl_RenderTexture, tcBlue).b;\n" +
+                    "\n" +
+                    "    vec2 tcGreen = theta1 * Scale + LensCenter;\n" +
+                    "    float green = texture2D(bgl_RenderTexture, tcGreen).g;\n" +
+                    "\n" +
+                    "    vec2 thetaRed = theta1 * (ChromAbParam.y * rSq + ChromAbParam.x);\n" +
+                    "    vec2 tcRed = thetaRed * Scale + LensCenter;\n" +
+                    "    float red = texture2D(bgl_RenderTexture, tcRed).r;\n" +
+                    "\n" +
+                    "    gl_FragColor = vec4(red, green, blue, 1.0);\n" +
+                    "}\n";
 
     public final String OCULUS_BASIC_FRAGMENT_SHADER =
 
@@ -1864,7 +1962,7 @@ public class VRRenderer extends EntityRenderer
     {
         float fit = 0.0f;
 
-        switch (this.mc.gameSettings.distortionFitPoint)
+        switch (this.mc.vrSettings.distortionFitPoint)
         {
             case 0:
                 fit = 1.0f;
@@ -1921,7 +2019,7 @@ public class VRRenderer extends EntityRenderer
     {
         float fit = -1.0f;
 
-        switch (this.mc.gameSettings.distortionFitPoint)
+        switch (this.mc.vrSettings.distortionFitPoint)
         {
             case 0:
                 fit = -1.0f;

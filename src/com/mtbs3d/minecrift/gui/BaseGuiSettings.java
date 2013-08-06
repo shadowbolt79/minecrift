@@ -5,9 +5,9 @@
 package com.mtbs3d.minecrift.gui;
 
 import com.mtbs3d.minecrift.VRRenderer;
+import com.mtbs3d.minecrift.settings.VRSettings;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.src.GameSettings;
 import net.minecraft.src.GuiButton;
 import net.minecraft.src.GuiScreen;
 
@@ -19,7 +19,7 @@ public class BaseGuiSettings extends GuiScreen
     protected String screenTitle = "";
 
     /** GUI game settings */
-    protected GameSettings guiGameSettings;
+    protected VRSettings guivrSettings;
 
     private int lastMouseX = 0;
     private int lastMouseY = 0;
@@ -38,17 +38,20 @@ public class BaseGuiSettings extends GuiScreen
     /** An array of all of EnumOption's video options. */
 
     public BaseGuiSettings( GuiScreen par1GuiScreen,
-                                GameSettings par2GameSettings)
+                                VRSettings par2vrSettings)
     {
 		this.parentGuiScreen = par1GuiScreen;
-        this.guiGameSettings = par2GameSettings;
+        this.guivrSettings = par2vrSettings;
         this.vrRenderer = Minecraft.getMinecraft().vrRenderer;
     }
 
+    public void drawScreen(int par1, int par2, float par3) {
+    	this.drawScreen( par1, par2, par3, true );
+    }
     /**
      * Draws the screen and all the components in it.
      */
-    public void drawScreen(int par1, int par2, float par3)
+    public void drawScreen(int par1, int par2, float par3, boolean drawBackground)
     {
         if (this.reinit)
         {
@@ -56,8 +59,9 @@ public class BaseGuiSettings extends GuiScreen
             this.reinit = false;
         }
 
-        this.drawDefaultBackground();
-        this.drawCenteredString(this.fontRenderer, this.screenTitle, this.width / 2, 20, 16777215);
+        if( drawBackground)
+        	this.drawDefaultBackground();
+        this.drawCenteredString(this.fontRenderer, this.screenTitle, this.width / 2, 15, 16777215);
         super.drawScreen(par1, par2, par3);
 
         if (Math.abs(par1 - this.lastMouseX) <= 5 && Math.abs(par2 - this.lastMouseY) <= 5)
