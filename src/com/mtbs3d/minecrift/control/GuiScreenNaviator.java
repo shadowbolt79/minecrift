@@ -171,9 +171,9 @@ public class GuiScreenNaviator {
 	        }
 	        catch (NoSuchFieldException e) {
 		        try {
-		        	guiLeft = GuiContainer.class.getDeclaredField("e"); //obfuscated name
-		        	guiTop  = GuiContainer.class.getDeclaredField("o"); //obfuscated name
-		        	System.out.println("[Minecrift]GuiScreenNavigator: Reflected obfuscated guiLeft/guiTop (e/o)");
+		        	guiLeft = GuiContainer.class.getDeclaredField("p"); //obfuscated name
+		        	guiTop  = GuiContainer.class.getDeclaredField("q"); //obfuscated name
+		        	System.out.println("[Minecrift]GuiScreenNavigator: Reflected obfuscated guiLeft/guiTop (p/q)");
 		        }
 		        catch (NoSuchFieldException e1) { 
 		        	System.out.println("[Minecrift]GuiScreenNavigator: Couldn't get guiLeft/guiTop via reflection! Joystick navigation of inventories may be inaccurate.");

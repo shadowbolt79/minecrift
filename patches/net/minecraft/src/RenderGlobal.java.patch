@@ -59,3 +59,19 @@
                  }
              }
  
+@@ -720,10 +740,11 @@
+         RenderHelper.disableStandardItemLighting();
+         WrUpdates.preRender(this, par1EntityLiving);
+ 
+-        if (this.mc.gameSettings.ofSmoothFps && par2 == 0)
+-        {
+-            GL11.glFinish();
+-        }
++        // VR renderer already calls this.
++//        if (this.mc.gameSettings.ofSmoothFps && par2 == 0)
++//        {
++//            GL11.glFinish();
++//        }
+ 
+         byte var42 = 0;
+         int var44 = 0;
