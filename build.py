@@ -3,6 +3,8 @@ import shutil, tempfile,zipfile, fnmatch
 from optparse import OptionParser
 import subprocess, shlex
 
+from install import prepare
+
 mc_ver ="1.5.2"
 
 try:
@@ -107,6 +109,10 @@ def create_install(mcp_dir):
 def main(mcp_dir):
     print 'Using mcp dir: %s' % mcp_dir
     print 'Using base dir: %s' % base_dir
+
+    prepare( mcp_dir )
+
+
     sys.path.append(mcp_dir)
     os.chdir(mcp_dir)
 

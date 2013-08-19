@@ -65,8 +65,30 @@ def download_native(url, folder, name):
     if not download_file(url, target):
         return False
 
+def prepare( mcp_dir ):
+
+    bin = os.path.join( mcp_dir,"jars","bin" )
+    mkdir_p( bin )
+    lib = os.path.join( mcp_dir,"lib" )
+    if os.path.exists( lib ):
+        shutil.rmtree( lib, True )
+    mkdir_p( lib )
+
+    download_deps( mcp_dir )
+
+    #for abs_path, _, filelist in os.walk(os.path.join(mcp_dir,"jars","libraries")):
+    #    for file in filelist:
+    #        if file[-4:] == ".jar":
+    #            symlink( os.path.join( abs_path,file), os.path.join( lib, file ) )
+
+    symlink( os.path.join( lib, "lwjgl-2.9.0.jar") ,      os.path.join( bin, "lwjgl.jar" ))
+    symlink( os.path.join( lib, "lwjgl_util-2.9.0.jar") , os.path.join( bin, "lwjgl_util.jar" ))
+    symlink( os.path.join( lib, "jinput-2.0.5.jar") ,     os.path.join( bin, "jinput.jar" ))
+    symlink( os.path.join( mcp_dir,"jars","versions",mc_version,mc_version+"-natives"), os.path.join(bin,"natives"))
 
 def download_deps( mcp_dir ):
+
+    print("Downloading dependencies...")
     if not os.path.exists(mcp_dir+"/runtime/commands.py "):
         download_file( "http://mcp.ocean-labs.de/files/archive/"+mcp_version+".zip", mcp_version+".zip" )
         try:
@@ -83,6 +105,7 @@ def download_deps( mcp_dir ):
     apply_patch( mcp_dir, "mcp.cfg.patch", os.path.join(mcp_dir,"conf"))
 
     jars = os.path.join(mcp_dir,"jars")
+    libdir = os.path.join( mcp_dir,"lib" )
 
     versions =  os.path.join(jars,"versions",mc_version)
     mkdir_p( versions )
@@ -130,7 +153,11 @@ def download_deps( mcp_dir ):
                 url = group.replace(".","/")+ "/"+artifact+"/"+version +"/"+artifact+"-"+version+".jar"
             file = os.path.join(jars,"libraries",url.replace("/",os.sep))
             mkdir_p(os.path.dirname(file))
+
             download_file( repo + url, file )
+
+            bname = os.path.basename( file )
+            symlink( file, os.path.join( libdir, bname ) )
 
             if "natives" in lib:
                 folder = os.path.join(jars,"versions",mc_version,mc_version+"-natives")
@@ -202,27 +229,14 @@ def symlink(source, link_name):
 def main(mcp_dir):
     print 'Using mcp dir: %s' % mcp_dir
     print 'Using base dir: %s' % base_dir
-    print("Downloading dependencies...")
-    download_deps( mcp_dir )
+
+    prepare( mcp_dir )
 
     print("Applying Optifine...")
     optifine = os.path.join(mcp_dir,"jars","libraries","net","optifine","OptiFine",of_version,"OptiFine-"+of_version+".jar" )
     minecraft =  os.path.join( mcp_dir,"jars","versions",mc_version,mc_version+".jar")
     zipmerge( minecraft, optifine )
-    bin = os.path.join( mcp_dir,"jars","bin" )
-    mkdir_p( bin )
-    lib = os.path.join( mcp_dir,"lib" )
-    mkdir_p( lib )
-    symlink( minecraft, os.path.join(bin,"minecraft.jar"))
-    for abs_path, _, filelist in os.walk(os.path.join(mcp_dir,"jars","libraries")):
-        for file in filelist:
-            if file[-4:] == ".jar":
-                symlink( os.path.join( abs_path,file), os.path.join( lib, file ) )
 
-    symlink( os.path.join( lib, "lwjgl-2.9.0.jar") ,      os.path.join( bin, "lwjgl.jar" ))
-    symlink( os.path.join( lib, "lwjgl_util-2.9.0.jar") , os.path.join( bin, "lwjgl_util.jar" ))
-    symlink( os.path.join( lib, "jinput-2.0.5.jar") ,     os.path.join( bin, "jinput.jar" ))
-    symlink( os.path.join( mcp_dir,"jars","versions",mc_version,mc_version+"-natives"), os.path.join(bin,"natives"))
 
     print("Decompiling...")
     src_dir = os.path.join(mcp_dir, "src","minecraft")
