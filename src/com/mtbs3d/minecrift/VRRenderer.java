@@ -431,8 +431,8 @@ public class VRRenderer extends EntityRenderer
 	        catch (NoSuchFieldException e) {
 		        try
 		        {
-		        	_soundManagerSndSystemField = SoundManager.class.getDeclaredField("b"); //obfuscated name
-		        	System.out.println("VRRender: Reflected obfuscated b");
+		        	_soundManagerSndSystemField = SoundManager.class.getDeclaredField("a"); //obfuscated name
+		        	System.out.println("VRRender: Reflected obfuscated a");
 		        }
 		        catch (NoSuchFieldException e1) { 
 		        	System.out.println("VRRender: got sndSystem directly");
@@ -442,23 +442,18 @@ public class VRRenderer extends EntityRenderer
 	       	if (_soundManagerSndSystemField != null)
 	       		_soundManagerSndSystemField.setAccessible(true);
         } 
-        if(!sndSystemReflect ){
-        	if( this.mc.sndManager != null )
-        		sndSystem = this.mc.sndManager.sndSystem;
-        	
-        }
-        
-        
-        if (_soundManagerSndSystemField != null && this.mc.sndManager != null)
-        {
+
+        if( sndSystemReflect ){
 			try 
         	{
-				sndSystem = (SoundSystem)_soundManagerSndSystemField.get(this.mc.sndManager);
+				sndSystem = (SoundSystem)_soundManagerSndSystemField.get(null);
 			} 
         	catch (IllegalArgumentException e) { } 
         	catch (IllegalAccessException e) { };
+		} else {
+       		sndSystem = SoundManager.sndSystem;
         }
-
+        
         float PIOVER180 = (float)(Math.PI/180);
 
         Vec3 up = Vec3.createVectorHelper(0, 1, 0);

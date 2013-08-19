@@ -5,7 +5,7 @@
  {
      /** A reference to the sound system. */
 -    private static SoundSystem sndSystem;
-+    public SoundSystem sndSystem;
++    public static SoundSystem sndSystem;
  
      /** Sound pool containing sounds. */
      private SoundPool soundPoolSounds = new SoundPool();
