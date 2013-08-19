@@ -30,7 +30,7 @@
       "name": "net.optifine:OptiFine:1.5.2_HD_U_D3"
     },
     {
-      "name": "de.fruitfly.ovr:JRift:0.2.3.3",
+      "name": "de.fruitfly.ovr:JRift:0.2.4.2",
 	  "url": "http://repo.minecraft-vr.com/"
     },
     {
@@ -169,7 +169,7 @@
       }
     },
     {
-      "name": "de.fruitfly.ovr:JRiftLibrary:0.2.3.3",
+      "name": "de.fruitfly.ovr:JRiftLibrary:0.2.4.2",
 	  "url": "http://repo.minecraft-vr.com/",
       "natives": {
         "linux": "natives-linux",
