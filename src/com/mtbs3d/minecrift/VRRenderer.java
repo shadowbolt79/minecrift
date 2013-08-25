@@ -1523,7 +1523,8 @@ public class VRRenderer extends EntityRenderer
         {
 	        //mc.checkGLError("PreFRenderLast");
             this.mc.mcProfiler.endStartSection("FRenderLast");
-            Reflector.callVoid(Reflector.ForgeHooksClient_dispatchRenderLast, new Object[] {renderGlobal, Float.valueOf(renderPartialTicks)});
+            //NOTE: Some mod in FTB Unleashed screws up the render state with this call. Its probably required for some, but this is a nice first pass to fix it up
+            //Reflector.callVoid(Reflector.ForgeHooksClient_dispatchRenderLast, new Object[] {renderGlobal, Float.valueOf(renderPartialTicks)});
 	        //mc.checkGLError("PostFRenderLast");
         }
 

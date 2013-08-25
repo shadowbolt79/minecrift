@@ -974,10 +974,19 @@
          }
  
          this.sndManager.playStreaming((String)null, 0.0F, 0.0F, 0.0F);
-@@ -2178,6 +2340,31 @@
+@@ -2177,7 +2339,40 @@
+     }
  
      public static void main(String[] par0ArrayOfStr)
-     {
++    { 
++    	ReflectorClass LaunchWrapper_Launch = new ReflectorClass("net.minecraft.launchwrapper.Launch");
++    	ReflectorField LaunchWrapper_mcHome = new ReflectorField(LaunchWrapper_Launch,"minecraftHome");
++
++    	if( LaunchWrapper_mcHome.exists() )
++    	{
++    		minecraftDir = (File)LaunchWrapper_mcHome.getValue();
++    	}
++
 +	    ReflectorClass FMLRelauncher = new ReflectorClass("cpw.mods.fml.relauncher.FMLRelauncher");
 +	    ReflectorMethod FMLRelauncher_handleClientRelaunch = new ReflectorMethod(FMLRelauncher, "handleClientRelaunch");
 +    	ArgsWrapper wrapper = new ArgsWrapper( par0ArrayOfStr );
@@ -1001,12 +1010,12 @@
 +    }
 +    
 +    public static void fmlReentry(ArgsWrapper wrapper)
-+    {
+     {
 +    	String[] par0ArrayOfStr = wrapper.args;
          HashMap var1 = new HashMap();
          boolean var2 = false;
          boolean var3 = true;
-@@ -2319,103 +2506,110 @@
+@@ -2319,103 +2514,110 @@
          if (this.objectMouseOver != null)
          {
              boolean var1 = this.thePlayer.capabilities.isCreativeMode;
@@ -1212,7 +1221,7 @@
  
              if (var1)
              {
-@@ -2507,8 +2701,13 @@
+@@ -2507,8 +2709,13 @@
      /**
       * Used in the usage snooper.
       */
@@ -1226,7 +1235,7 @@
          for (int var0 = 16384; var0 > 0; var0 >>= 1)
          {
              GL11.glTexImage2D(GL11.GL_PROXY_TEXTURE_2D, 0, GL11.GL_RGBA, var0, var0, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, (ByteBuffer)null);
-@@ -2516,6 +2715,7 @@
+@@ -2516,6 +2723,7 @@
  
              if (var1 != 0)
              {
@@ -1234,7 +1243,7 @@
                  return var0;
              }
          }
-@@ -2609,4 +2809,61 @@
+@@ -2609,4 +2817,61 @@
      {
          return this.field_94139_O;
      }
