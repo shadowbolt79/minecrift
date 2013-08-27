@@ -92,7 +92,6 @@ def download_deps( mcp_dir ):
     if not os.path.exists(mcp_dir+"/runtime/commands.py "):
         download_file( "http://mcp.ocean-labs.de/files/archive/"+mcp_version+".zip", mcp_version+".zip" )
         try:
-            os.mkdir( mcp_dir )
             mcp_zip = zipfile.ZipFile( mcp_version+".zip" )
             mcp_zip.extractall( mcp_dir )
             import stat
