@@ -235,12 +235,16 @@ def main(mcp_dir):
     optifine = os.path.join(mcp_dir,"jars","libraries","net","optifine","OptiFine",of_version,"OptiFine-"+of_version+".jar" )
     minecraft =  os.path.join( mcp_dir,"jars","versions",mc_version,mc_version+".jar")
     zipmerge( minecraft, optifine )
+    symlink( minecraft, os.path.join( mcp_dir,"jars","bin","minecraft.jar"))
 
 
     print("Decompiling...")
-    src_dir = os.path.join(mcp_dir, "src","minecraft")
-    if os.path.exists( src_dir ):
-        shutil.rmtree( src_dir, True )
+    try:
+        src_dir = os.path.join(mcp_dir, "src","minecraft")
+        if os.path.exists( src_dir ):
+            shutil.rmtree( src_dir, True )
+    except OSError:
+        pass
     sys.path.append(mcp_dir)
     os.chdir(mcp_dir)
     from runtime.decompile import decompile
@@ -249,10 +253,13 @@ def main(mcp_dir):
 
     os.chdir( base_dir )
 
-    org_src_dir = os.path.join(mcp_dir, "src",".minecraft_orig")
-    if os.path.exists( org_src_dir ):
-        shutil.rmtree( org_src_dir, True )
-    shutil.copytree( src_dir, org_src_dir )
+    try:
+        org_src_dir = os.path.join(mcp_dir, "src",".minecraft_orig")
+        if os.path.exists( org_src_dir ):
+            shutil.rmtree( org_src_dir, True )
+        shutil.copytree( src_dir, org_src_dir )
+    except OSError:
+        pass
 
     applychanges( mcp_dir )
 
