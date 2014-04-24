@@ -673,41 +673,16 @@
              this.ingameGUI.updateTick();
          }
  
-@@ -1394,21 +1572,24 @@
-             this.renderEngine.func_110550_d();
-         }
- 
--        if (this.currentScreen == null && this.thePlayer != null)
-+        if (this.theWorld == null)    // TODO: Only display if world null - otherwise display in render
+@@ -1409,7 +1587,7 @@
          {
--            if (this.thePlayer.func_110143_aJ() <= 0.0F)
-+            if (this.currentScreen == null && this.thePlayer != null)
-             {
--                this.displayGuiScreen((GuiScreen)null);
-+                if (this.thePlayer.func_110143_aJ() <= 0.0F)
-+                {
-+                    this.displayGuiScreen((GuiScreen)null);
-+                }
-+                else if (this.thePlayer.isPlayerSleeping() && this.theWorld != null)
-+                {
-+                    this.displayGuiScreen(new GuiSleepMP());
-+                }
-             }
--            else if (this.thePlayer.isPlayerSleeping() && this.theWorld != null)
-+            else if (this.currentScreen != null && this.currentScreen instanceof GuiSleepMP && !this.thePlayer.isPlayerSleeping())
-             {
--                this.displayGuiScreen(new GuiSleepMP());
-+                this.displayGuiScreen((GuiScreen)null);
-             }
+             this.displayGuiScreen((GuiScreen)null);
          }
--        else if (this.currentScreen != null && this.currentScreen instanceof GuiSleepMP && !this.thePlayer.isPlayerSleeping())
--        {
--            this.displayGuiScreen((GuiScreen)null);
--        }
- 
+-
++        
          if (this.currentScreen != null)
          {
-@@ -1504,7 +1685,7 @@
+             this.leftClickCounter = 10000;
+@@ -1504,7 +1682,7 @@
                      }
                      else if (this.currentScreen != null)
                      {
@@ -716,7 +691,7 @@
                      }
                  }
              }
-@@ -1562,6 +1743,11 @@
+@@ -1562,6 +1740,11 @@
                                  this.displayInGameMenu();
                              }
  
@@ -728,7 +703,7 @@
                              if (Keyboard.getEventKey() == 31 && Keyboard.isKeyDown(61))
                              {
                                  this.func_110436_a();
-@@ -1605,7 +1791,7 @@
+@@ -1605,7 +1788,7 @@
                                  this.gameSettings.hideGUI = !this.gameSettings.hideGUI;
                              }
  
@@ -737,7 +712,7 @@
                              {
                                  this.gameSettings.showDebugInfo = !this.gameSettings.showDebugInfo;
                                  this.gameSettings.showDebugProfilerChart = GuiScreen.isShiftKeyDown();
-@@ -1738,6 +1924,12 @@
+@@ -1738,6 +1921,12 @@
  
              this.sendClickBlockToController(0, this.currentScreen == null && this.gameSettings.keyBindAttack.pressed && this.inGameHasFocus);
          }
@@ -750,7 +725,7 @@
  
          if (this.theWorld != null)
          {
-@@ -1824,6 +2016,11 @@
+@@ -1824,6 +2013,11 @@
              this.myNetworkManager.processReadPackets();
          }
  
@@ -762,7 +737,7 @@
          this.mcProfiler.endSection();
          this.systemTime = getSystemTime();
      }
-@@ -1850,8 +2047,43 @@
+@@ -1850,8 +2044,43 @@
          }
  
          this.statFileWriter.readStat(StatList.startGameStat, 1);
@@ -773,6 +748,7 @@
 +        	Reflector.callVoid(Reflector.FMLGameData_initializeServerGate, new Object[]{2});
 +        }
 +
+
 +
          this.theIntegratedServer = new IntegratedServer(this, par1Str, par2Str, par3WorldSettings);
          this.theIntegratedServer.startServerThread();
@@ -806,7 +782,7 @@
          this.integratedServerIsRunning = true;
          this.loadingScreen.displayProgressMessage(I18n.func_135053_a("menu.loadingLevel"));
  
-@@ -1905,6 +2137,11 @@
+@@ -1905,6 +2134,11 @@
      public void loadWorld(WorldClient par1WorldClient, String par2Str)
      {
          this.statFileWriter.syncStats();
@@ -818,7 +794,7 @@
  
          if (par1WorldClient == null)
          {
-@@ -1941,6 +2178,7 @@
+@@ -1941,6 +2175,7 @@
          {
              this.setServerData((ServerData)null);
              this.integratedServerIsRunning = false;
@@ -826,7 +802,7 @@
          }
  
          this.sndManager.playStreaming((String)null, 0.0F, 0.0F, 0.0F);
-@@ -2096,107 +2334,114 @@
+@@ -2096,107 +2331,114 @@
          if (this.objectMouseOver != null)
          {
              boolean var1 = this.thePlayer.capabilities.isCreativeMode;
@@ -836,7 +812,8 @@
              int var5;
 -
 -            if (this.objectMouseOver.typeOfHit == EnumMovingObjectType.TILE)
--            {
++            if(!Reflector.ForgeHooks_onPickBlock.exists())
+             {
 -                var5 = this.objectMouseOver.blockX;
 -                int var6 = this.objectMouseOver.blockY;
 -                int var7 = this.objectMouseOver.blockZ;
@@ -859,8 +836,7 @@
 -                var3 = Block.blocksList[var9].getDamageValue(this.theWorld, var5, var6, var7);
 -            }
 -            else
-+            if(!Reflector.ForgeHooks_onPickBlock.exists())
-             {
+-            {
 -                if (this.objectMouseOver.typeOfHit != EnumMovingObjectType.ENTITY || this.objectMouseOver.entityHit == null || !var1)
 -                {
 -                    return;
@@ -1036,7 +1012,7 @@
  
              if (var1)
              {
-@@ -2282,8 +2527,13 @@
+@@ -2282,8 +2524,13 @@
      /**
       * Used in the usage snooper.
       */
@@ -1050,7 +1026,7 @@
          for (int var0 = 16384; var0 > 0; var0 >>= 1)
          {
              GL11.glTexImage2D(GL11.GL_PROXY_TEXTURE_2D, 0, GL11.GL_RGBA, var0, var0, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, (ByteBuffer)null);
-@@ -2291,6 +2541,7 @@
+@@ -2291,6 +2538,7 @@
  
              if (var1 != 0)
              {
@@ -1058,7 +1034,7 @@
                  return var0;
              }
          }
-@@ -2376,7 +2627,7 @@
+@@ -2376,7 +2624,7 @@
      {
          return this.field_94139_O;
      }
@@ -1067,7 +1043,7 @@
      public Session func_110432_I()
      {
          return this.session;
-@@ -2416,4 +2667,63 @@
+@@ -2416,4 +2664,63 @@
      {
          return par0Minecraft.field_135017_as;
      }
