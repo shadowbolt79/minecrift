@@ -128,7 +128,7 @@
          this.gameSettings = new GameSettings(this, this.mcDataDir);
 +        this.vrSettings = new VRSettings(this, this.mcDataDir);
 +
- 
+         
          if (this.gameSettings.overrideHeight > 0 && this.gameSettings.overrideWidth > 0)
          {
 -            this.displayWidth = this.gameSettings.overrideWidth;
@@ -712,9 +712,9 @@
      }
 @@ -1850,8 +2043,43 @@
          }
-- 
--         this.statFileWriter.readStat(StatList.startGameStat, 1);
--+        
+ 
+         this.statFileWriter.readStat(StatList.startGameStat, 1);
++        
 +        boolean fmlGameData = Reflector.FMLGameData.exists();
 +        if( fmlGameData )
 +        {
@@ -784,8 +784,7 @@
              int var5;
 -
 -            if (this.objectMouseOver.typeOfHit == EnumMovingObjectType.TILE)
-+            if(!Reflector.ForgeHooks_onPickBlock.exists())
-             {
+-            {
 -                var5 = this.objectMouseOver.blockX;
 -                int var6 = this.objectMouseOver.blockY;
 -                int var7 = this.objectMouseOver.blockZ;
@@ -808,7 +807,8 @@
 -                var3 = Block.blocksList[var9].getDamageValue(this.theWorld, var5, var6, var7);
 -            }
 -            else
--            {
++            if(!Reflector.ForgeHooks_onPickBlock.exists())
+             {
 -                if (this.objectMouseOver.typeOfHit != EnumMovingObjectType.ENTITY || this.objectMouseOver.entityHit == null || !var1)
 -                {
 -                    return;
