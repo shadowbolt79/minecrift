@@ -82,7 +82,7 @@
 
  {
 
-     private static final ResourceLocation field_110444_H = new ResourceLocation("textures/gui/title/mojang.png");
+     private static final ResourceLocation locationMojangPng = new ResourceLocation("textures/gui/title/mojang.png");
 
 @@ -55,8 +73,15 @@
 
@@ -152,9 +152,9 @@
 
 @@ -119,12 +147,13 @@
 
-     private final String field_110447_Z;
+     private final String launchedVersion;
 
-     private final Proxy field_110453_aa;
+     private final Proxy proxy;
 
      private ISaveFormat saveLoader;
 
@@ -228,9 +228,9 @@
 
 @@ -202,8 +246,7 @@
 
-         this.field_94139_O.logInfo("Setting user: " + par1Session.func_111285_a());
+         this.mcLogAgent.logInfo("Setting user: " + par1Session.getUsername());
 
-         this.field_94139_O.logInfo("(Session ID is " + par1Session.func_111286_b() + ")");
+         this.mcLogAgent.logInfo("(Session ID is " + par1Session.getSessionID() + ")");
 
          this.isDemo = par5;
 
@@ -278,7 +278,7 @@
 
 +        Display.setResizable(true);
 
-+        Display.setTitle("Minecraft 1.6.2 VR");
++        Display.setTitle("Minecraft 1.6.4 VR");
 
 +
 
@@ -334,17 +334,17 @@
 
 -        Display.setResizable(true);
 
--        Display.setTitle("Minecraft 1.6.2");
+-        Display.setTitle("Minecraft 1.6.4");
 
          this.getLogAgent().logInfo("LWJGL Version: " + Sys.getVersion());
 
  
 
-         if (Util.func_110647_a() != EnumOS.MACOS)
+         if (Util.getOSType() != EnumOS.MACOS)
 
 @@ -350,6 +386,19 @@
 
-         this.field_110451_am.func_110542_a(this.sndManager);
+         this.mcResourceManager.registerReloadListener(this.sndManager);
 
          this.loadScreen();
 
@@ -370,9 +370,9 @@
 
 +			//One of these should work...
 
-+       		Reflector.callVoid(fmlClientHandler, Reflector.FMLClientHandler_beginMinecraftLoading2, new Object[]{this,this.field_110449_ao,this.field_110451_am});
++            Reflector.callVoid(fmlClientHandler, Reflector.FMLClientHandler_beginMinecraftLoading2, new Object[] {this, this.defaultResourcePacks, this.mcResourceManager});
 
-+        	Reflector.callVoid(fmlClientHandler, Reflector.FMLClientHandler_beginMinecraftLoading, new Object[]{this,this.field_110449_ao});
++            Reflector.callVoid(fmlClientHandler, Reflector.FMLClientHandler_beginMinecraftLoading, new Object[] {this, this.defaultResourcePacks});
 
 +        }
 
@@ -384,9 +384,9 @@
 
 @@ -363,10 +412,37 @@
 
-         this.field_110451_am.func_110542_a(new GrassColorReloadListener());
+         this.mcResourceManager.registerReloadListener(new GrassColorReloadListener());
 
-         this.field_110451_am.func_110542_a(new FoliageColorReloadListener());
+         this.mcResourceManager.registerReloadListener(new FoliageColorReloadListener());
 
          RenderManager.instance.itemRenderer = new ItemRenderer(this);
 
@@ -420,7 +420,7 @@
 
 +        	mumbleLink = new MumbleLink("MinecraftVR", "Minecraft VR");
 
-+        	mumbleLink.setIdentityAndContext(this.session.func_111285_a(), "Minecraft"/*TODO: get the servername? */);
++        	mumbleLink.setIdentityAndContext(this.session.getUsername(), "Minecraft"/*TODO: get the servername? */);
 
 +        } catch( Exception e ) {
 
@@ -464,9 +464,9 @@
 
          this.renderGlobal = new RenderGlobal(this);
 
-         this.renderEngine.func_130088_a(TextureMap.field_110575_b, new TextureMap(0, "textures/blocks"));
+         this.renderEngine.loadTextureMap(TextureMap.locationBlocksTexture, new TextureMap(0, "textures/blocks"));
 
-         this.renderEngine.func_130088_a(TextureMap.field_110576_c, new TextureMap(1, "textures/items"));
+         this.renderEngine.loadTextureMap(TextureMap.locationItemsTexture, new TextureMap(1, "textures/items"));
 
 -        GL11.glViewport(0, 0, this.displayWidth, this.displayHeight);
 
@@ -578,7 +578,7 @@
 
  
 
-     public void func_110436_a()
+     public void refreshResources()
 
 @@ -495,8 +606,7 @@
 
@@ -600,7 +600,7 @@
 
      /**
 
-@@ -595,21 +705,28 @@
+@@ -595,21 +705,27 @@
 
          {
 
@@ -621,8 +621,6 @@
 +            ((GuiScreen)par1GuiScreen).setWorldAndResolution(this, width, height);
 
              this.skipRenderWorld = false;
-
-+
 
          }
 
@@ -666,7 +664,7 @@
 
  
 
-@@ -622,6 +739,15 @@
+@@ -622,6 +738,15 @@
 
          }
 
@@ -698,13 +696,13 @@
 
       * application (or web page) is exited.
 
-@@ -652,6 +778,8 @@
+@@ -652,6 +777,8 @@
 
              }
 
  
 
-             this.sndManager.closeMinecraft();
+             this.sndManager.cleanup();
 
 +
 
@@ -716,7 +714,7 @@
 
          {
 
-@@ -683,6 +811,7 @@
+@@ -683,6 +810,7 @@
 
              return;
 
@@ -732,7 +730,7 @@
 
              while (this.running)
 
-@@ -782,7 +911,8 @@
+@@ -782,7 +910,8 @@
 
          this.checkGLError("Pre render");
 
@@ -752,7 +750,7 @@
 
          {
 
-@@ -808,9 +938,44 @@
+@@ -808,9 +937,44 @@
 
  
 
@@ -760,23 +758,23 @@
 
          {
 
-+		    	Object fmlCommonHandler = null;
++	    	Object fmlCommonHandler = null;
 
-+		    	if( Reflector.FMLCommonHandler_instance.exists())
++	    	if( Reflector.FMLCommonHandler_instance.exists())
 
-+		    	{
++	    	{
 
-+		    		fmlCommonHandler = Reflector.call(Reflector.FMLCommonHandler_instance, new Object[0]);
++	    		fmlCommonHandler = Reflector.call(Reflector.FMLCommonHandler_instance, new Object[0]);
 
-+		    	}
++	    	}
 
-+		    	if( fmlCommonHandler != null )
++	    	if( fmlCommonHandler != null )
 
-+		    	{
++	    	{
 
-+		    		Reflector.callVoid(fmlCommonHandler, Reflector.FMLCommonHandler_onRenderTickStart, new Object[]{this.timer.renderPartialTicks});
++	    		Reflector.callVoid(fmlCommonHandler, Reflector.FMLCommonHandler_onRenderTickStart, new Object[]{this.timer.renderPartialTicks});
 
-+		    	}
++	    	}
 
              this.mcProfiler.endStartSection("gameRenderer");
 
@@ -784,57 +782,57 @@
 
 +                
 
-+                //VR mouse hack: transform the mouse coordinates from screen (framebuffer) size to GUI framebuffer coordinates
++            //VR mouse hack: transform the mouse coordinates from screen (framebuffer) size to GUI framebuffer coordinates
 
-+                int mouseX=0;
++            int mouseX=0;
 
-+                int mouseY=0;
++            int mouseY=0;
 
-+	            if(this.vrSettings.useVRRenderer)
++            if(this.vrSettings.useVRRenderer)
 
-+	            {
++            {
 
-+		            mouseX = Mouse.getX();
++	            mouseX = Mouse.getX();
 
-+		            mouseY = Mouse.getY();
++	            mouseY = Mouse.getY();
 
-+		            Mouse.setCursorPosition(mouseX*this.displayWidth/this.displayFBWidth, mouseY*this.displayHeight/this.displayFBHeight);
++	            Mouse.setCursorPosition(mouseX*this.displayWidth/this.displayFBWidth, mouseY*this.displayHeight/this.displayFBHeight);
 
-+	            }
++            }
 
              this.entityRenderer.updateCameraAndRender(this.timer.renderPartialTicks);
 
 +
 
-+	            if(this.vrSettings.useVRRenderer)
++            if(this.vrSettings.useVRRenderer)
 
-+	            {
++            {
 
-+	            	if( resetMouse ) {
++            	if( resetMouse ) {
 
-+	            		Mouse.setCursorPosition(this.mouseFBX, this.mouseFBY);
++            		Mouse.setCursorPosition(this.mouseFBX, this.mouseFBY);
 
-+	            		resetMouse = false;
++            		resetMouse = false;
 
-+	            	} else {
++            	} else {
 
-+	            		Mouse.setCursorPosition(mouseX, mouseY);
++            		Mouse.setCursorPosition(mouseX, mouseY);
 
-+	            	}
++            	}
 
-+	            }
++            }
 
 +
 
              this.mcProfiler.endSection();
 
-+		    	if( fmlCommonHandler != null )
++	    	if( fmlCommonHandler != null )
 
-+		    	{
++	    	{
 
-+		    		Reflector.callVoid(fmlCommonHandler, Reflector.FMLCommonHandler_onRenderTickEnd, new Object[]{this.timer.renderPartialTicks});
++	    		Reflector.callVoid(fmlCommonHandler, Reflector.FMLCommonHandler_onRenderTickEnd, new Object[]{this.timer.renderPartialTicks});
 
-+		    	}
++	    	}
 
          }
 
@@ -842,7 +840,7 @@
 
          GL11.glFlush();
 
-@@ -837,7 +1002,7 @@
+@@ -837,7 +1001,7 @@
 
              this.prevFrameTime = System.nanoTime();
 
@@ -860,7 +858,7 @@
 
  
 
-@@ -850,20 +1015,9 @@
+@@ -850,20 +1014,9 @@
 
  
 
@@ -908,11 +906,11 @@
 
          this.checkGLError("Post render");
 
-@@ -901,7 +1055,7 @@
+@@ -901,7 +1054,7 @@
 
  
 
-     private int func_90020_K()
+     private int getLimitFramerate()
 
      {
 
@@ -926,7 +924,7 @@
 
      public void freeMemory()
 
-@@ -950,7 +1104,7 @@
+@@ -950,7 +1103,7 @@
 
              if (!this.isTakingScreenshot)
 
@@ -944,7 +942,7 @@
 
          else
 
-@@ -1009,7 +1163,7 @@
+@@ -1009,7 +1162,7 @@
 
              GL11.glMatrixMode(GL11.GL_PROJECTION);
 
@@ -962,7 +960,7 @@
 
              GL11.glTranslatef(0.0F, 0.0F, -2000.0F);
 
-@@ -1017,8 +1171,8 @@
+@@ -1017,8 +1170,8 @@
 
              GL11.glDisable(GL11.GL_TEXTURE_2D);
 
@@ -984,27 +982,11 @@
 
              var5.setColorRGBA_I(0, 200);
 
-@@ -1139,15 +1293,25 @@
-
-     }
-
- 
-
-     /**
-
--     * Resets the player keystate, disables the ingame focus, and ungrabs the mouse cursor.
-
-+     * Resets the player keystate, disables the ingame focus, and ungrabs the mouse 
-
-      */
-
-     public void setIngameNotInFocus()
+@@ -1145,9 +1298,19 @@
 
      {
 
--        if (this.inGameHasFocus)
-
-+        if( this.inGameHasFocus )
+         if (this.inGameHasFocus)
 
          {
 
@@ -1046,23 +1028,7 @@
 
  
 
-@@ -1158,6 +1322,7 @@
-
-     {
-
-         if (this.currentScreen == null)
-
-         {
-
-+
-
-             this.displayGuiScreen(new GuiIngameMenu());
-
- 
-
-             if (this.isSingleplayer() && !this.theIntegratedServer.getPublic())
-
-@@ -1200,7 +1365,7 @@
+@@ -1200,7 +1363,7 @@
 
       * Called whenever the mouse is clicked. Button clicked is 0 for left clicking and 1 for right clicking. Args:
 
@@ -1080,7 +1046,7 @@
 
          {
 
-@@ -1290,46 +1455,25 @@
+@@ -1290,46 +1453,25 @@
 
       */
 
@@ -1118,7 +1084,7 @@
 
              {
 
-                 this.func_110441_Q();
+                 this.updateDisplayMode();
 
 -                this.displayWidth = Display.getDisplayMode().getWidth();
 
@@ -1196,7 +1162,7 @@
 
              Display.setFullscreen(this.fullscreen);
 
-@@ -1345,17 +1489,35 @@
+@@ -1345,17 +1487,35 @@
 
      /**
 
@@ -1280,7 +1246,7 @@
 
  
 
-@@ -1364,10 +1526,24 @@
+@@ -1364,10 +1524,24 @@
 
       */
 
@@ -1330,7 +1296,7 @@
 
          this.statFileWriter.func_77449_e();
 
-@@ -1375,6 +1551,8 @@
+@@ -1375,6 +1549,8 @@
 
  
 
@@ -1348,25 +1314,7 @@
 
  
 
-@@ -1409,7 +1587,7 @@
-
-         {
-
-             this.displayGuiScreen((GuiScreen)null);
-
-         }
-
--
-
-+        
-
-         if (this.currentScreen != null)
-
-         {
-
-             this.leftClickCounter = 10000;
-
-@@ -1504,7 +1682,7 @@
+@@ -1504,7 +1680,7 @@
 
                      }
 
@@ -1384,7 +1332,7 @@
 
              }
 
-@@ -1562,6 +1740,11 @@
+@@ -1562,6 +1738,11 @@
 
                                  this.displayInGameMenu();
 
@@ -1406,27 +1354,25 @@
 
                              {
 
-                                 this.func_110436_a();
+                                 this.refreshResources();
 
-@@ -1605,7 +1788,7 @@
-
-                                 this.gameSettings.hideGUI = !this.gameSettings.hideGUI;
-
-                             }
+@@ -1607,6 +1788,7 @@
 
  
 
--                            if (Keyboard.getEventKey() == 61)
-
-+                            if (Keyboard.getEventKey() == Keyboard.KEY_F3)
+                             if (Keyboard.getEventKey() == 61)
 
                              {
+
++								// F3
 
                                  this.gameSettings.showDebugInfo = !this.gameSettings.showDebugInfo;
 
                                  this.gameSettings.showDebugProfilerChart = GuiScreen.isShiftKeyDown();
 
-@@ -1738,6 +1921,12 @@
+                             }
+
+@@ -1738,6 +1920,12 @@
 
  
 
@@ -1452,7 +1398,7 @@
 
          {
 
-@@ -1824,6 +2013,11 @@
+@@ -1824,6 +2012,11 @@
 
              this.myNetworkManager.processReadPackets();
 
@@ -1476,7 +1422,7 @@
 
      }
 
-@@ -1850,8 +2044,43 @@
+@@ -1850,8 +2043,43 @@
 
          }
 
@@ -1560,11 +1506,11 @@
 
          this.integratedServerIsRunning = true;
 
-         this.loadingScreen.displayProgressMessage(I18n.func_135053_a("menu.loadingLevel"));
+         this.loadingScreen.displayProgressMessage(I18n.getString("menu.loadingLevel"));
 
  
 
-@@ -1905,6 +2134,11 @@
+@@ -1905,6 +2133,11 @@
 
      public void loadWorld(WorldClient par1WorldClient, String par2Str)
 
@@ -1588,7 +1534,7 @@
 
          {
 
-@@ -1941,6 +2175,7 @@
+@@ -1941,6 +2174,7 @@
 
          {
 
@@ -1604,7 +1550,7 @@
 
          this.sndManager.playStreaming((String)null, 0.0F, 0.0F, 0.0F);
 
-@@ -2096,107 +2331,114 @@
+@@ -2096,107 +2330,114 @@
 
          if (this.objectMouseOver != null)
 
@@ -1772,7 +1718,7 @@
 
                  {
 
-                     var2 = Item.field_111214_ch.itemID;
+                     var2 = Item.leash.itemID;
 
                  }
 
@@ -2024,7 +1970,7 @@
 
              {
 
-@@ -2282,8 +2524,13 @@
+@@ -2282,8 +2523,13 @@
 
      /**
 
@@ -2052,7 +1998,7 @@
 
              GL11.glTexImage2D(GL11.GL_PROXY_TEXTURE_2D, 0, GL11.GL_RGBA, var0, var0, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, (ByteBuffer)null);
 
-@@ -2291,6 +2538,7 @@
+@@ -2291,6 +2537,7 @@
 
  
 
@@ -2068,29 +2014,11 @@
 
          }
 
-@@ -2376,7 +2624,7 @@
+@@ -2416,4 +2663,63 @@
 
      {
 
-         return this.field_94139_O;
-
-     }
-
--
-
-+    
-
-     public Session func_110432_I()
-
-     {
-
-         return this.session;
-
-@@ -2416,4 +2664,63 @@
-
-     {
-
-         return par0Minecraft.field_135017_as;
+         return par0Minecraft.mcLanguageManager;
 
      }
 
